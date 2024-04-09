@@ -2,7 +2,15 @@
 name = "cshell"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.76.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Dominic Mayhew <dominic.mayhew@txpipe.io>"]
+description = "A Cardano wallet CLI built for developers."
+readme = "README.md"
+repository = "https://github.com/txpipe/cshell"
+license = "Apache-2.0"
+
+keywords = ["cardano", "blockchain", "wallet", "cardano"]
+categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
 
 [dependencies]
