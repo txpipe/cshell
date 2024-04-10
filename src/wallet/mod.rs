@@ -1,6 +1,10 @@
 use clap::{Parser, Subcommand};
 use tracing::instrument;
 
+mod config;
+mod create;
+mod dal;
+
 #[derive(Parser)]
 pub struct Args {
     #[command(subcommand)]
@@ -9,9 +13,8 @@ pub struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    CommandA,
-    // /// create a new wallet
-    // Create(create::Args),
+    /// Create a new wallet. Leave arguments blank for interactive mode.
+    Create(create::Args),
     // /// show wallet info
     // Info(info::Args),
     // /// show wallet address
@@ -35,9 +38,9 @@ enum Commands {
 }
 
 #[instrument("wallet", skip_all)]
-pub async fn run(args: Args, _ctx: &crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     match args.command {
-        // Commands::Create(args) => create::run(args, ctx).await,
+        Commands::Create(args) => create::run(args, ctx).await,
         // Commands::Address(args) => address::run(args, ctx).await,
         // Commands::Info(args) => info::run(args, ctx).await,
         // Commands::List(args) => list::run(args, ctx).await,
@@ -54,6 +57,5 @@ pub async fn run(args: Args, _ctx: &crate::Context) -> miette::Result<()> {
         // Commands::Utxos(args) => utxos::run(args, ctx).await,
         // Commands::Select(args) => select::run(args, ctx).await,
         // Commands::Balance(args) => balance::run(args, ctx).await,
-        _ => Ok(println!("Not implemented yet. Sorry!")),
     }
 }
