@@ -4,10 +4,11 @@ use tracing::Level;
 use tracing_indicatif::IndicatifLayer;
 use tracing_subscriber::prelude::*;
 
-mod configure;
+mod chain;
 mod dirs;
 mod transaction;
 mod utils;
+mod utxorpc;
 mod wallet;
 
 #[derive(Parser)]
@@ -38,14 +39,19 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Configure ??? TODO
-    Configure(configure::Args),
+    /// Configure a UTxO RPC endpoint to use to interact with a chain
+    #[command(alias = "u5c")]
+    Utxorpc(utxorpc::Args),
+
     /// Manage Transactions
     #[command(alias = "tx")]
     Transaction(transaction::Args),
 
     /// Manage Wallets
     Wallet(wallet::Args),
+
+    /// Interact with the chain through a UTxO RPC config
+    Chain(chain::Args),
 }
 
 #[derive(ValueEnum, Clone)]
@@ -84,12 +90,12 @@ pub fn with_tracing() {
 #[tokio::main]
 async fn main() -> miette::Result<()> {
     let cli = Cli::parse();
-
     let ctx = Context::for_cli(&cli)?;
 
     match cli.command {
-        Commands::Configure(args) => configure::run(args, &ctx).await,
-        Commands::Wallet(args) => wallet::run(args, &ctx).await,
+        Commands::Utxorpc(args) => utxorpc::run(args, &ctx).await,
         Commands::Transaction(args) => transaction::run(args, &ctx).await,
+        Commands::Wallet(args) => wallet::run(args, &ctx).await,
+        Commands::Chain(args) => chain::run(args, &ctx).await,
     }
 }

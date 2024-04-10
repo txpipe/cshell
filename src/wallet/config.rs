@@ -1,11 +1,7 @@
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    fs,
-    io::{BufReader, Read, Write},
-    path::{Path, PathBuf},
+use crate::{
+    dirs,
+    utils::{self, Config, ConfigName},
 };
-
 use chrono::{DateTime, Local};
 use comfy_table::Table;
 use miette::{Context, IntoDiagnostic};
@@ -13,7 +9,7 @@ use pallas::ledger::traverse::{Era, MultiEraOutput};
 use serde::{Deserialize, Serialize};
 
 use super::dal::entities::utxo::Model as UtxoModel;
-use crate::utils::{deserialize_date, serialize_date, OutputFormatter};
+use crate::utils::OutputFormatter;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Addresses {
@@ -28,108 +24,63 @@ pub struct Keys {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SubmitApi {
-    pub url: String,
-    pub headers: HashMap<String, String>,
-}
-
-const DEFAULT_SUBMIT_API_URL: &str =
-    "https://submitapi-preprod-api-peaceful-relation-132bd4.us1.demeter.run/api/submit/tx";
-
-impl Default for SubmitApi {
-    fn default() -> Self {
-        Self {
-            url: String::from(DEFAULT_SUBMIT_API_URL),
-            headers: HashMap::default(),
-        }
-    }
-}
-
-const WALLETS_DIR_NAME: &str = "wallets";
-const CONFIG_FILENAME: &str = "config.toml";
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct Wallet {
     pub version: String,
-    pub name: String,
-    // TODO
+    pub name: ConfigName,
     pub keys: Keys,
     pub addresses: Addresses,
-    pub chain: Option<String>,
-    pub submit_api: Option<SubmitApi>,
-
-    #[serde(serialize_with = "serialize_date")]
-    #[serde(deserialize_with = "deserialize_date")]
+    pub utxorpc_config: ConfigName,
     pub created_on: DateTime<Local>,
+    pub last_updated: DateTime<Local>,
 }
 
 impl Wallet {
-    pub fn new(name: String, keys: Keys, addresses: Addresses, chain: Option<String>) -> Self {
-        let version = String::from("v1alpha");
-
-        Self {
-            version,
+    pub fn new(
+        name: ConfigName,
+        keys: Keys,
+        addresses: Addresses,
+        utxorpc_config: ConfigName,
+    ) -> miette::Result<Self> {
+        let now = Local::now();
+        Ok(Self {
+            version: crate::utils::VERSION.to_owned(),
             name,
-            // TODO
             keys,
             addresses,
-            chain,
-            submit_api: None,
-            created_on: Local::now(),
+            utxorpc_config,
+            created_on: now,
+            last_updated: now,
+        })
+    }
+
+    pub fn update(
+        &mut self,
+        keys: Option<Keys>,
+        addresses: Option<Addresses>,
+        utxorpc_config: Option<ConfigName>,
+    ) {
+        if let Some(keys) = keys {
+            self.keys = keys;
+        }
+        if let Some(addresses) = addresses {
+            self.addresses = addresses;
+        }
+        if let Some(utxorpc_config) = utxorpc_config {
+            self.utxorpc_config = utxorpc_config;
         }
     }
-
-    pub fn wallet_dir(root_dir: &Path, name: &str) -> PathBuf {
-        root_dir.join(WALLETS_DIR_NAME).join(name)
+}
+impl Config for Wallet {
+    fn name(&self) -> &ConfigName {
+        &self.name
     }
 
-    pub fn load_config(root_dir: &Path, name: &str) -> miette::Result<Option<Self>> {
-        let config_path = Self::config_path(root_dir, name);
-
-        if config_path.exists() {
-            let file = fs::File::open(config_path).into_diagnostic()?;
-            let contents = {
-                let mut contents = String::new();
-                let mut buf_reader = BufReader::new(file);
-                buf_reader.read_to_string(&mut contents).into_diagnostic()?;
-                contents
-            };
-
-            let wallet: Wallet = toml::from_str(&contents).into_diagnostic()?;
-            return Ok(Some(wallet));
-        }
-
-        Ok(None)
+    fn parent_dir_name() -> &'static str {
+        &dirs::WALLETS_PARENT_DIR
     }
 
-    pub fn config_path(root_dir: &Path, name: &str) -> PathBuf {
-        Self::wallet_dir(root_dir, name).join(CONFIG_FILENAME)
-    }
-
-    pub fn list_available(root_dir: &Path) -> miette::Result<Vec<String>> {
-        let parent = root_dir
-            .join(WALLETS_DIR_NAME)
-            .read_dir()
-            .into_diagnostic()?;
-
-        let names = parent
-            .into_iter()
-            .filter_map(|dir| dir.ok())
-            .map(|d| String::from(d.file_name().to_string_lossy()))
-            .collect();
-
-        Ok(names)
-    }
-
-    pub fn save_config(&self, root_dir: &Path) -> miette::Result<()> {
-        let wallet_path = Self::wallet_dir(root_dir, &self.name);
-        fs::create_dir_all(wallet_path).into_diagnostic()?;
-
-        let config_path = Self::config_path(root_dir, &self.name);
-        let toml_string = toml::to_string(self).into_diagnostic()?;
-        let mut file = fs::File::create(config_path).into_diagnostic()?;
-        file.write_all(toml_string.as_bytes()).into_diagnostic()?;
-        Ok(())
+    fn toml_file_name() -> &'static str {
+        &dirs::WALLET_CONFIG_FILENAME
     }
 }
 
@@ -137,16 +88,21 @@ impl OutputFormatter for Wallet {
     fn to_table(&self) {
         let mut table = Table::new();
 
-        table.set_header(vec!["property", "value"]);
+        table.set_header(vec!["Property", "Value"]);
 
         table.add_row(vec!["Name", &self.name]);
-        table.add_row(vec![
-            "Chain",
-            &self.chain.as_deref().unwrap_or("not attached"),
-        ]);
+        table.add_row(vec!["UTxO RPC Config", &self.utxorpc_config]);
         table.add_row(vec!["Public Key Hash", &self.keys.public_key_hash]);
         table.add_row(vec!["Address (mainnet)", &self.addresses.mainnet]);
         table.add_row(vec!["Address (testnet)", &self.addresses.testnet]);
+        table.add_row(vec![
+            "Created on",
+            &utils::pretty_print_date(&self.created_on),
+        ]);
+        table.add_row(vec![
+            "Last updated",
+            &utils::pretty_print_date(&self.last_updated),
+        ]);
 
         println!("{table}");
     }
@@ -161,23 +117,17 @@ impl OutputFormatter for Vec<Wallet> {
     fn to_table(&self) {
         let mut table = Table::new();
 
-        table.set_header(vec!["name", "chain"]);
+        table.set_header(vec!["Name", "UTxO RPC Config"]);
 
         for wallet in self {
-            table.add_row(vec![
-                &wallet.name,
-                wallet
-                    .chain
-                    .as_ref()
-                    .unwrap_or(&String::from("not attached")),
-            ]);
+            table.add_row(vec![&wallet.name.raw, &wallet.utxorpc_config.raw]);
         }
 
         println!("{table}");
     }
 
     fn to_json(&self) {
-        let json = serde_json::to_string_pretty(self).unwrap();
+        let json: String = serde_json::to_string_pretty(self).unwrap();
         println!("{json}");
     }
 }

@@ -11,8 +11,12 @@ use pallas::{
 use rand::rngs::OsRng;
 use tracing::{info, instrument};
 
-use crate::wallet;
-use crate::wallet::config;
+use crate::{
+    utils::{Config, ConfigName, OutputFormatter},
+    wallet,
+};
+
+use crate::wallet::config::Wallet;
 
 #[derive(Parser, Clone)]
 pub struct Args {
@@ -25,35 +29,21 @@ pub struct Args {
     password: Option<String>,
 
     /// name of the chain to attach the wallet
-    // TODO
-    #[arg(short, long, env = "CSHELL_DEFAULT_CHAIN")]
-    pub chain: Option<String>,
+    #[arg(env = "CSHELL_DEFAULT_UTXORPC_CONFIG")]
+    pub utxorpc_config: Option<String>,
 }
 
 struct UserSelections {
-    name: String,
+    name: ConfigName,
     password: String,
-    chain: Option<String>,
+    utxorpc_config: String,
 }
 
 #[instrument("create", skip_all)]
 pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
-    let selections = gather_inputs(args)?;
+    let selections = gather_inputs(args, ctx).await?;
 
-    let wallet_slug = slug::slugify(&selections.name);
-    let wallet_path = config::Wallet::wallet_dir(&ctx.dirs.root_dir, &wallet_slug);
-
-    if wallet_path.exists() {
-        bail!("Wallet {} already exists.", wallet_slug)
-    }
-
-    // TODO
-    // if selections.chain.is_some()
-    //     && !chain::config::Chain::dir(&ctx.dirs.root_dir, selections.chain.as_ref().unwrap()).exists()
-    // {
-    //     bail!("chain doesn't exist")
-    // }
-
+    // Make keys
     let priv_key = SecretKey::new(OsRng);
     let pkh = priv_key.public_key().compute_hash();
     let encrypted_priv_key =
@@ -66,21 +56,21 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     let mainnet_address = ShelleyAddress::new(
         Network::Mainnet,
         ShelleyPaymentPart::key_hash(pkh.into()),
-        ShelleyDelegationPart::Null, // TODO ?
+        ShelleyDelegationPart::Null, // TODO: Do we need a delegation part?
     );
 
     let testnet_address = ShelleyAddress::new(
         Network::Testnet,
         ShelleyPaymentPart::key_hash(pkh.into()),
-        ShelleyDelegationPart::Null,
+        ShelleyDelegationPart::Null, // TODO: Do we need a delegation part?
     );
 
     let addresses = wallet::config::Addresses {
-        mainnet: mainnet_address.to_bech32().into_diagnostic()?, // TODO: Should be mainnet, pre-prod, and preview?
+        mainnet: mainnet_address.to_bech32().into_diagnostic()?,
         testnet: testnet_address.to_bech32().into_diagnostic()?,
     };
 
-    // TODO
+    // TODO: Update SQLite with the new wallet info.
     // let db = wallet::dal::WalletDB::open(&args.name, &wallet_path)
     // .await
     // .into_diagnostic()?;
@@ -88,41 +78,59 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
 
     // Save wallet config
     let wallet = wallet::config::Wallet::new(
-        String::from(&wallet_slug),
+        selections.name,
         key_data,
         addresses,
-        selections.chain,
-    );
-    wallet.save_config(&ctx.dirs.root_dir)?;
+        ConfigName::new(selections.utxorpc_config)?,
+    )?;
+    wallet.save(&ctx.dirs, false).await?;
 
-    info!(wallet = wallet.name, "created");
-    println!(
-        "Wallet created at {}",
-        wallet::config::Wallet::wallet_dir(&ctx.dirs.root_dir, &wallet_slug).display()
-    );
+    // Log, print, and finish
+    info!(wallet = wallet.name().raw, "created");
+    println!("Wallet created:");
+    wallet.output(&ctx.output_format);
     Ok(())
 }
 
-fn gather_inputs(args: Args) -> miette::Result<UserSelections> {
-    let name = match args.name {
+async fn gather_inputs(args: Args, ctx: &crate::Context) -> miette::Result<UserSelections> {
+    let raw_name = match args.name {
         Some(name) => name,
         None => inquire::Text::new("Name of the wallet:")
             .prompt()
             .into_diagnostic()?,
     };
+    let name = ConfigName::new(raw_name)?;
+
+    if let Some(conflict) = Wallet::find_match(&ctx.dirs, &name).await? {
+        bail!(
+            r#"Wallet with the same or conflicting name "{}" already exists. Both normalize to "{}"."#,
+            &conflict.raw,
+            &name.normalized()
+        )
+    }
 
     let password = match args.password {
         Some(password) => password,
-        None => inquire::Password::new("password:")
-            .with_help_message("the spending password of your wallet")
+        None => inquire::Password::new("Password:")
+            .with_help_message("The spending password of your wallet")
             .with_display_mode(inquire::PasswordDisplayMode::Masked)
             .prompt()
             .into_diagnostic()?,
     };
 
+    let utxorpc_config = match args.utxorpc_config {
+        Some(cfg) => cfg,
+        None => inquire::Text::new(
+            "Name of the UTxO RPC Config to use with this wallet. \
+            Note that this determines the chain this wallet will use.",
+        )
+        .prompt()
+        .into_diagnostic()?,
+    };
+
     Ok(UserSelections {
         name,
         password,
-        chain: args.chain,
+        utxorpc_config,
     })
 }

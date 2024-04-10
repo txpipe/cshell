@@ -32,7 +32,7 @@ impl WalletDB {
             conn: db,
         };
 
-        out.migrate_up().await?;
+        out.migrate_up().await?; // TODO: What is migrate up?
 
         Ok(out)
     }
@@ -128,7 +128,7 @@ impl WalletDB {
         page_size: Option<u64>,
     ) -> Paginator<'_, DatabaseConnection, SelectModel<utxo::Model>> {
         Utxo::find()
-            .order_by(utxo::Column::Slot, order.clone())
+            .order_by(utxo::Column::Slot, order)
             .paginate(&self.conn, page_size.unwrap_or(DEFAULT_PAGE_SIZE))
     }
 
@@ -147,7 +147,7 @@ impl WalletDB {
 
     pub async fn fetch_all_utxos(&self, order: Order) -> Result<Vec<utxo::Model>, DbErr> {
         Utxo::find()
-            .order_by(utxo::Column::Slot, order.clone())
+            .order_by(utxo::Column::Slot, order)
             .all(&self.conn)
             .await
     }

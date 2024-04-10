@@ -9,6 +9,7 @@ pub struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Unimplemented
     CommandA,
     // /// create a new empty transaction in the transaction staging area for the
     // /// specified chain
@@ -38,7 +39,7 @@ enum Commands {
 #[instrument("transaction", skip_all)]
 pub async fn run(args: Args, _ctx: &crate::Context) -> miette::Result<()> {
     match args.command {
-        _ => Ok(println!("Not implemented yet. Sorry!")),
+        _ => unimplemented!("Not implemented yet. Sorry!"),
         //     Commands::Create(args) => create::run(args, ctx).await,
         //     Commands::List(args) => list::run(args, ctx).await,
         //     Commands::Edit(args) => {
