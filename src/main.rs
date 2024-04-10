@@ -7,7 +7,7 @@ use tracing_subscriber::prelude::*;
 mod configure;
 mod dirs;
 mod transaction;
-// mod utils;
+mod utils;
 mod wallet;
 
 #[derive(Parser)]
@@ -75,7 +75,7 @@ pub fn with_tracing() {
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::filter::LevelFilter::INFO)
-        .with(tracing_subscriber::filter::Targets::default().with_target("cardaminal", Level::INFO))
+        .with(tracing_subscriber::filter::Targets::default().with_target("cshell", Level::INFO))
         .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_stderr_writer()))
         .with(indicatif_layer)
         .init();

@@ -1,7 +1,7 @@
 use miette::{bail, IntoDiagnostic};
 use std::path::{Path, PathBuf};
 
-const DEFAULT_PATH_NAME: &str = "cardaminal";
+const DEFAULT_PATH_NAME: &str = "cshell";
 
 fn default_root_dir() -> miette::Result<PathBuf> {
     if let Some(path) = directories::ProjectDirs::from("", "", DEFAULT_PATH_NAME) {

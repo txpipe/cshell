@@ -25,7 +25,7 @@ enum Commands {
     // /// build/finalize a transaction in the staging area so that it is ready for
     // /// signatures to be attached
     // Build(build::Args),
-    // /// sign a transaction using a Cardaminal wallet
+    // /// sign a transaction using a C-Shell wallet
     // Sign(sign::Args),
     // /// submit a transaction to cardano node
     // Submit(submit::Args),
