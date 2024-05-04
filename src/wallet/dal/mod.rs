@@ -1,19 +1,23 @@
-pub mod entities;
-pub mod migration;
+pub use entity::{prelude::*, protocol_parameters, recent_points, transaction, tx_history, utxo};
+use futures::future::{join_all, try_join_all};
+pub use migration::Migrator;
+use tracing::error;
+use utxorpc::spec::cardano::Block;
+use utxorpc::spec::sync::BlockRef;
 
+use std::num;
 use std::path::{Path, PathBuf};
 
-use pallas::ledger::addresses::{Address, ShelleyPaymentPart};
-use pallas::ledger::traverse::{Era, MultiEraInput, MultiEraOutput};
+use pallas::ledger::addresses::Address;
 use sea_orm::entity::prelude::*;
 use sea_orm::{Condition, Database, Order, Paginator, QueryOrder, SelectModel, TransactionTrait};
 use sea_orm_migration::MigratorTrait;
+use types::{TransactionInfo, TxoInfo};
 
-use self::entities::prelude::{ProtocolParameters, RecentPoints, Transaction, TxHistory, Utxo};
-use self::entities::{protocol_parameters, recent_points, transaction, tx_history, utxo};
-use self::migration::Migrator;
+pub mod types;
 
-static DEFAULT_PAGE_SIZE: u64 = 20;
+const DEFAULT_PAGE_SIZE: u64 = 20;
+const DEFAULT_POINTS_SPREAD_SIZE: u32 = 20;
 
 pub struct WalletDB {
     pub name: String,
@@ -23,7 +27,7 @@ pub struct WalletDB {
 
 impl WalletDB {
     pub async fn open(name: &str, path: &Path) -> Result<Self, DbErr> {
-        let sqlite_url = format!("sqlite:{}/state.sqlite?mode=rwc", path.display()); // TODO
+        let sqlite_url = format!("sqlite:{}/state.sqlite?mode=rwc", path.display());
         let db = Database::connect(sqlite_url).await?;
 
         let out = Self {
@@ -32,7 +36,7 @@ impl WalletDB {
             conn: db,
         };
 
-        out.migrate_up().await?; // TODO: What is migrate up?
+        out.migrate_up().await?;
 
         Ok(out)
     }
@@ -43,83 +47,70 @@ impl WalletDB {
 
     // UTxOs
 
-    pub async fn insert_utxos(
-        &self,
-        utxos: Vec<([u8; 32], usize, MultiEraOutput<'_>, u64, Era)>,
-    ) -> Result<(), DbErr> {
-        let txn = self.conn.begin().await?;
-
-        for (tx_hash, txo_index, txout, slot, era) in utxos {
-            let address = txout.address().unwrap();
-
-            let address_bytes = address.to_vec();
-
-            let payment_cred = match address {
-                Address::Shelley(s) => match s.payment() {
-                    ShelleyPaymentPart::Key(h) => *h,
-                    ShelleyPaymentPart::Script(_) => {
-                        unimplemented!("cannot store script controlled utxos")
-                    }
-                },
-                _ => unimplemented!("cannot store byron address controlled utxos"),
-            };
-
-            let utxo_model = entities::utxo::ActiveModel {
-                tx_hash: sea_orm::ActiveValue::Set(tx_hash.to_vec()),
-                txo_index: sea_orm::ActiveValue::Set(txo_index as i32),
-                payment_cred: sea_orm::ActiveValue::Set(payment_cred.to_vec()),
-                full_address: sea_orm::ActiveValue::Set(address_bytes),
-                slot: sea_orm::ActiveValue::Set(slot as i64),
-                era: sea_orm::ActiveValue::Set(era.into()),
-                cbor: sea_orm::ActiveValue::Set(txout.encode()),
-                ..Default::default()
-            };
-
-            let _ = Utxo::insert(utxo_model).exec(&txn).await?;
+    pub async fn insert_utxos(&self, utxos: &Vec<TxoInfo>) -> Result<(), DbErr> {
+        if utxos.is_empty() {
+            return Ok(());
         }
 
-        txn.commit().await
+        let models: Vec<utxo::ActiveModel> = utxos
+            .into_iter()
+            .map(|info| info.as_active_model())
+            .collect();
+
+        Utxo::insert_many(models).exec(&self.conn).await?;
+        Ok(())
     }
 
-    pub async fn remove_utxos(
-        &self,
-        utxos: Vec<MultiEraInput<'_>>,
-    ) -> Result<Vec<utxo::Model>, DbErr> {
+    pub async fn remove_utxos(&self, utxos: &Vec<TxoInfo>) -> Result<Vec<utxo::Model>, DbErr> {
+        // Early exit to prevent all UTxOs being returned by blanket `any` condition
+        if utxos.is_empty() {
+            return Ok(vec![]);
+        }
+
         let txn = self.conn.begin().await?;
 
-        let mut removed = vec![];
+        let condition = utxos.iter().fold(Condition::any(), |condition, utxo| {
+            condition
+                .add(utxo::Column::TxHash.eq(utxo.tx_hash.to_vec()))
+                .add(utxo::Column::TxoIndex.eq(utxo.txo_index))
+        });
 
-        for txin in utxos {
-            if let Some(utxo_model) = Utxo::find()
-                .filter(
-                    Condition::all()
-                        .add(utxo::Column::TxHash.eq(txin.hash().to_vec()))
-                        .add(utxo::Column::TxoIndex.eq(txin.index())),
-                )
-                .one(&txn)
-                .await?
-            {
-                removed.push(utxo_model.clone());
+        let found_utxos = Utxo::find().filter(condition.clone()).all(&txn).await?;
 
-                let _ = utxo_model.delete(&txn).await?;
-            }
+        let deleted_count = Utxo::delete_many()
+            .filter(condition)
+            .exec(&txn)
+            .await?
+            .rows_affected;
+
+        if deleted_count != found_utxos.len() as u64 {
+            error!(
+                "The wrong number of UTxOs were deleted.
+                {deleted_count} UTxOs were deleted, but these {} UTxOs were found:{:?}",
+                found_utxos.len(),
+                found_utxos
+            );
         }
 
         txn.commit().await?;
 
-        Ok(removed)
+        Ok(found_utxos)
     }
 
     pub async fn resolve_utxo(
         &self,
         tx_hash: &[u8],
-        txo_index: i32,
-    ) -> Result<Option<utxo::Model>, DbErr> {
+        txo_index: u32,
+    ) -> Result<Option<TxoInfo>, DbErr> {
         Utxo::find()
-            .filter(utxo::Column::TxHash.eq(tx_hash))
-            .filter(utxo::Column::TxoIndex.eq(txo_index))
+            .filter(
+                Condition::all()
+                    .add(utxo::Column::TxHash.eq(tx_hash))
+                    .add(utxo::Column::TxoIndex.eq(txo_index)),
+            )
             .one(&self.conn)
             .await
+            .map(|res| res.map(TxoInfo::from))
     }
 
     pub fn paginate_utxos(
@@ -140,39 +131,33 @@ impl WalletDB {
         page_size: Option<u64>,
     ) -> Paginator<'_, DatabaseConnection, SelectModel<utxo::Model>> {
         Utxo::find()
-            .filter(utxo::Column::FullAddress.eq(address.to_vec()))
-            .order_by(tx_history::Column::Slot, order.clone())
+            .filter(utxo::Column::Address.eq(address.to_vec()))
+            .order_by(utxo::Column::Slot, order.clone())
             .paginate(&self.conn, page_size.unwrap_or(DEFAULT_PAGE_SIZE))
     }
 
-    pub async fn fetch_all_utxos(&self, order: Order) -> Result<Vec<utxo::Model>, DbErr> {
-        Utxo::find()
+    pub async fn fetch_all_utxos(&self, order: Order) -> Result<Vec<TxoInfo>, DbErr> {
+        let models = Utxo::find()
             .order_by(utxo::Column::Slot, order)
             .all(&self.conn)
-            .await
+            .await?;
+
+        Ok(models.into_iter().map(|model| model.into()).collect())
     }
 
     // Transaction History
 
     // TODO: balance type
-    pub async fn insert_history_tx(
-        &self,
-        tx_hash: [u8; 32],
-        slot: u64,
-        tx_block_index: u16,
-        delta: Vec<u8>,
-    ) -> Result<(), DbErr> {
-        let history_model = entities::tx_history::ActiveModel {
-            tx_hash: sea_orm::ActiveValue::Set(tx_hash.to_vec()),
-            slot: sea_orm::ActiveValue::Set(slot as i64),
-            block_index: sea_orm::ActiveValue::Set(tx_block_index.into()),
-            balance_delta: sea_orm::ActiveValue::Set(delta),
-            ..Default::default()
-        };
-
-        let _ = TxHistory::insert(history_model).exec(&self.conn).await?;
-
-        Ok(())
+    pub async fn insert_history_txs(&self, txs: &Vec<TransactionInfo>) -> Result<(), DbErr> {
+        if txs.is_empty() {
+            Ok(())
+        } else {
+            let models = txs.iter().map(|info| info.as_active_model());
+            TxHistory::insert_many(models)
+                .exec(&self.conn)
+                .await
+                .map(|_| {})
+        }
     }
 
     pub fn paginate_tx_history(
@@ -182,32 +167,77 @@ impl WalletDB {
     ) -> Paginator<'_, DatabaseConnection, SelectModel<tx_history::Model>> {
         TxHistory::find()
             .order_by(tx_history::Column::Slot, order.clone())
-            .order_by(tx_history::Column::BlockIndex, order)
+            .order_by(tx_history::Column::TxIndex, order)
             .paginate(&self.conn, page_size.unwrap_or(DEFAULT_PAGE_SIZE))
+    }
+
+    // Blocks
+
+    pub async fn insert_blocks(&self, blocks: &Vec<Block>) -> Result<(), DbErr> {
+        if blocks.is_empty() {
+            Ok(())
+        } else {
+            let models = blocks.iter().map(types::block_to_model);
+
+            BlockHistory::insert_many(models)
+                .exec(&self.conn)
+                .await
+                .map(|_| {})
+        }
     }
 
     // Recent Points
 
-    pub async fn insert_recent_point(&self, slot: u64, block_hash: [u8; 32]) -> Result<(), DbErr> {
-        let point_model = entities::recent_points::ActiveModel {
-            slot: sea_orm::ActiveValue::Set(slot as i64),
-            block_hash: sea_orm::ActiveValue::Set(block_hash.into()),
-            ..Default::default()
-        };
+    pub async fn insert_recent_points(&self, points: Vec<(u64, Vec<u8>)>) -> Result<(), DbErr> {
+        let models = points
+            .into_iter()
+            .map(|(slot, hash)| entity::recent_points::ActiveModel {
+                slot: sea_orm::ActiveValue::Set(slot as i64), // TODO Why i64?
+                block_hash: sea_orm::ActiveValue::Set(hash),
+            });
 
-        let _ = RecentPoints::insert(point_model).exec(&self.conn).await?;
-
+        RecentPoints::insert_many(models).exec(&self.conn).await?;
         Ok(())
     }
 
-    /// Paginate entries in Recents Points table in descending order
-    pub fn paginate_recent_points(
-        &self,
-        page_size: Option<u64>,
-    ) -> Paginator<'_, DatabaseConnection, SelectModel<recent_points::Model>> {
-        RecentPoints::find()
+    pub async fn get_most_recent_point(&self) -> Result<Option<BlockRef>, DbErr> {
+        let model = RecentPoints::find()
             .order_by_desc(recent_points::Column::Slot)
-            .paginate(&self.conn, page_size.unwrap_or(DEFAULT_PAGE_SIZE))
+            .one(&self.conn)
+            .await?;
+
+        Ok(model.as_ref().map(types::block_ref_from_recent_point))
+    }
+
+    pub async fn get_recent_points_spread(
+        &self,
+        num_points: Option<u32>,
+    ) -> Result<Vec<BlockRef>, DbErr> {
+        let page_size = DEFAULT_PAGE_SIZE;
+
+        let paginated_points = RecentPoints::find()
+            .order_by_desc(recent_points::Column::Slot)
+            .paginate(&self.conn, page_size);
+        let paginated_points = std::sync::Arc::new(paginated_points);
+
+        let indices =
+            (0..num_points.unwrap_or(DEFAULT_POINTS_SPREAD_SIZE)).map(|n| (2 as u64).pow(n));
+
+        let points_spread: Vec<_> = try_join_all(indices.map(move |i| {
+            let paginated_points = std::sync::Arc::clone(&paginated_points);
+            async move {
+                let points = paginated_points.fetch_page(i / page_size).await?;
+                let point = points.get(i as usize % page_size as usize);
+                Ok::<Option<recent_points::Model>, DbErr>(point.cloned())
+            }
+        }))
+        .await?;
+
+        Ok(points_spread
+            .iter()
+            .flatten()
+            .map(types::block_ref_from_recent_point)
+            .collect())
     }
 
     pub async fn remove_recent_points_before_slot(&self, slot: u64) -> Result<(), DbErr> {
@@ -233,7 +263,7 @@ impl WalletDB {
         tx_block_index: u16,
         update_cbor: Vec<u8>,
     ) -> Result<(), DbErr> {
-        let pparams_model = entities::protocol_parameters::ActiveModel {
+        let pparams_model = entity::protocol_parameters::ActiveModel {
             slot: sea_orm::ActiveValue::Set(slot as i64),
             block_index: sea_orm::ActiveValue::Set(tx_block_index.into()),
             update_cbor: sea_orm::ActiveValue::Set(update_cbor),
@@ -315,7 +345,7 @@ impl WalletDB {
     // Transactions
 
     pub async fn insert_transaction(&self, tx_json: Vec<u8>) -> Result<i32, DbErr> {
-        let transaction_model = entities::transaction::ActiveModel {
+        let transaction_model = entity::transaction::ActiveModel {
             tx_json: sea_orm::ActiveValue::Set(tx_json),
             status: sea_orm::ActiveValue::Set(transaction::Status::Staging),
             ..Default::default()
@@ -348,7 +378,7 @@ impl WalletDB {
     }
 
     pub async fn update_transaction(&self, model: transaction::Model) -> Result<(), DbErr> {
-        let model: entities::transaction::ActiveModel = model.into();
+        let model: entity::transaction::ActiveModel = model.into();
 
         Transaction::update(model.reset_all())
             .exec(&self.conn)
@@ -357,7 +387,6 @@ impl WalletDB {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use pallas::ledger::{
@@ -414,7 +443,7 @@ mod tests {
             (hash_1, index_1, utxo_1, slot_1, Era::Alonzo),
         ];
 
-        wallet_db.insert_utxos(utxos).await.unwrap();
+        // wallet_db.insert_utxos(utxos).await.unwrap(); // TODO
 
         let now_utxos = wallet_db
             .paginate_utxos(Order::Asc, None)
@@ -465,15 +494,15 @@ mod tests {
             to_remove.push(txin);
         }
 
-        wallet_db
-            .remove_utxos(
-                to_remove
-                    .iter()
-                    .map(MultiEraInput::from_alonzo_compatible)
-                    .collect(),
-            )
-            .await
-            .unwrap();
+        // wallet_db
+        //     .remove_utxos(
+        //         to_remove
+        //             .iter()
+        //             .map(MultiEraInput::from_alonzo_compatible)
+        //             .collect(),
+        //     )
+        //     .await
+        //     .unwrap(); // TODO
 
         let now_utxos = wallet_db
             .paginate_utxos(Order::Asc, None)

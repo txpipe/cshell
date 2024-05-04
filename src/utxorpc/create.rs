@@ -10,16 +10,27 @@ use crate::utils::{Config, OutputFormatter};
 pub struct Args {
     /// Name of the UTxO RPC configuration (e.g., "preview")
     name: String,
+    /// Name of the network
+    network: String,
     /// URL of the UTxO RPC endpoint
     url: Url,
     /// Headers to pass to the UTxO RPC endpoint
     #[arg(short('H'), long, value_parser = crate::utils::parse_key_value, value_name = "KEY:VALUE")]
     headers: Vec<(String, String)>,
+    /// If the network is a testnet (default: false)
+    #[arg(short, long)]
+    is_testnet: bool,
 }
 
 #[instrument("create", skip_all, fields(name=args.name))]
 pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
-    let cfg = Utxorpc::new(args.name, args.url, args.headers)?;
+    let cfg = Utxorpc::new(
+        args.name,
+        args.url,
+        args.network,
+        args.is_testnet,
+        args.headers,
+    )?;
 
     cfg.save(&ctx.dirs, false).await?;
 

@@ -1,6 +1,6 @@
 use clap::Parser;
 use miette::{bail, IntoDiagnostic};
-use utxorpc::{spec::sync::BlockRef, CardanoSyncClient, ClientBuilder};
+use utxorpc::{spec::sync::BlockRef, Cardano, CardanoSyncClient, ClientBuilder, HistoryPage};
 
 use crate::{
     utils::{Config, ConfigName},
@@ -17,7 +17,7 @@ pub struct Args {
     index: Option<u64>,
     #[arg(requires = "index")]
     hash: Option<String>,
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "1")]
     pages: u32,
 }
 
@@ -32,49 +32,61 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
 
     match utxo_cfg {
         None => bail!(r#"No UTxO config named "{}" exists."#, name.raw),
-        Some(cfg) => dump_history(cfg, start, args.limit, args.pages).await,
+        Some(cfg) => print_paginated_history(&cfg, start, args.limit, args.pages).await,
     }
 }
 
-pub async fn dump_history(
-    utxo_cfg: Utxorpc,
+pub async fn print_paginated_history(
+    utxo_cfg: &Utxorpc,
     mut start: Option<BlockRef>,
     limit: u32,
     pages: u32,
 ) -> miette::Result<()> {
-    let mut client = ClientBuilder::new().uri(utxo_cfg.url).into_diagnostic()?;
-
-    for (header, value) in utxo_cfg.headers {
-        client = client.metadata(header, value).into_diagnostic()?;
-    }
-
-    let mut client = client.build::<CardanoSyncClient>().await;
-
-    for _ in 0..pages {
-        let page = client.dump_history(start, limit).await.into_diagnostic()?;
-
+    for page_idx in 0..pages {
+        // Get and print page
+        let page = dump_history(utxo_cfg, &start, limit).await?;
         for block in page.items {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&block).into_diagnostic()?
-            );
+            ) // TODO: Use OUTPUT_FORMAT
         }
 
-        if !inquire::Confirm::new("Get next page?")
-            .with_default(true)
-            .prompt()
-            .into_diagnostic()?
+        if page_idx > 0
+            && !inquire::Confirm::new("Get next page?")
+                .with_default(true)
+                .prompt()
+                .into_diagnostic()?
         {
             break;
         } else {
             match page.next {
-                Some(next) => {
-                    start = Some(next);
-                }
-                None => break,
+                Some(next) => start = Some(next),
+                None => println!("Chain tip reached."),
             }
         }
     }
 
     Ok(())
+}
+
+pub async fn dump_history(
+    utxo_cfg: &Utxorpc,
+    start: &Option<BlockRef>,
+    limit: u32,
+) -> miette::Result<HistoryPage<Cardano>> {
+    let mut client = ClientBuilder::new().uri(&utxo_cfg.url).into_diagnostic()?;
+
+    for (header, value) in utxo_cfg.headers.iter() {
+        client = client.metadata(header, value).into_diagnostic()?;
+    }
+
+    let mut client = client.build::<CardanoSyncClient>().await;
+
+    let page = client
+        .dump_history(start.clone(), limit)
+        .await
+        .into_diagnostic()?;
+
+    Ok(page)
 }
