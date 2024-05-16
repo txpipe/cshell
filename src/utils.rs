@@ -10,8 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReadDirStream;
 use tokio_stream::StreamExt;
-use tracing::error;
-use utxorpc::spec::cardano::{Block, BlockBody, BlockHeader, TxOutput};
+use utxorpc::spec::cardano::{Block, BlockBody, BlockHeader};
 use utxorpc::spec::sync::BlockRef;
 
 use crate::dirs;
@@ -251,13 +250,16 @@ fn block_body_to_table(body: &BlockBody) -> Table {
     table
 }
 
-impl OutputFormatter for BlockRef {
+impl OutputFormatter for Vec<BlockRef> {
     fn to_table(&self) {
         let mut table = Table::new();
-        table
-            .set_header(vec!["Property", "Value"])
-            .add_row(vec!["Index".to_owned(), self.index.to_string()])
-            .add_row(vec!["Hash".to_owned(), hex::encode(&self.hash)]);
+        table.set_header(vec!["Index", "Hash"]);
+        self.iter().for_each(|block_ref| {
+            table
+                .add_row(vec!["Index".to_owned(), block_ref.index.to_string()])
+                .add_row(vec!["Hash".to_owned(), hex::encode(&block_ref.hash)]);
+        });
+
         println!("{table}");
     }
 

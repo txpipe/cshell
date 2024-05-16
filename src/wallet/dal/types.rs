@@ -1,5 +1,7 @@
+use std::error::Error;
+
 use comfy_table::Table;
-use entity::{recent_points, tx_history, utxo};
+use entity::{block_history, recent_points, tx_history, utxo};
 use miette::{bail, IntoDiagnostic};
 use num_bigint::BigInt;
 use pallas::{
@@ -7,7 +9,7 @@ use pallas::{
     ledger::addresses::{Address, ShelleyAddress},
 };
 use prost::bytes::Bytes;
-use serde::{ser::SerializeMap, Serialize};
+use serde::{Serialize, Serializer};
 use utxorpc::spec::{
     cardano::{Block, TxInput, TxOutput},
     sync::BlockRef,
@@ -15,12 +17,15 @@ use utxorpc::spec::{
 
 use crate::utils::OutputFormatter;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TransactionInfo {
+    #[serde(serialize_with = "serialize_bytes_as_hex")]
     pub hash: Bytes,
+    #[serde(serialize_with = "serialize_bytes_as_hex")]
     pub block_hash: Bytes,
     pub slot: u64,
     pub tx_index: u16,
+    #[serde(serialize_with = "serialize_big_int")]
     pub delta: BigInt,
 }
 impl TransactionInfo {
@@ -35,11 +40,60 @@ impl TransactionInfo {
         }
     }
 }
+impl From<tx_history::Model> for TransactionInfo {
+    fn from(
+        tx_history::Model {
+            tx_hash,
+            tx_index,
+            coin_delta,
+            slot,
+            block_hash,
+        }: tx_history::Model,
+    ) -> Self {
+        TransactionInfo {
+            hash: tx_hash.into(),
+            block_hash: block_hash.into(),
+            slot: u64_from_db_vec(&slot).unwrap(),
+            tx_index: tx_index as u16,
+            delta: big_int_from_db_vec(&coin_delta),
+        }
+    }
+}
+impl OutputFormatter for Vec<TransactionInfo> {
+    fn to_table(&self) {
+        let mut table = Table::new();
+        table.set_header(vec![
+            "Slot",
+            "Block Hash",
+            "Tx Index",
+            "Tx Hash",
+            "Coin delta",
+        ]);
 
-#[derive(Debug, Clone)]
+        self.iter().for_each(|tx_info| {
+            table.add_row(vec![
+                tx_info.slot.to_string(),
+                hex::encode(&tx_info.block_hash),
+                tx_info.tx_index.to_string(),
+                hex::encode(&tx_info.hash),
+                tx_info.delta.to_string(),
+            ]);
+        });
+
+        println!("{table}");
+    }
+
+    fn to_json(&self) {
+        println!("{}", serde_json::to_string_pretty(self).unwrap());
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct TxoInfo {
+    #[serde(serialize_with = "serialize_bytes_as_hex")]
     pub tx_hash: Bytes,
     pub txo_index: u32,
+    #[serde(serialize_with = "serialize_address_as_shelley_bech32")]
     pub address: Bytes,
     pub slot: u64,
     pub coin: u64,
@@ -109,50 +163,6 @@ impl From<utxo::Model> for TxoInfo {
         }
     }
 }
-impl Serialize for TxoInfo {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        #[derive(Serialize)]
-        struct SerializeTxoInfo {
-            tx_hash: String,
-            txo_index: u32,
-            address: String,
-            slot: u64,
-            coin: u64,
-        }
-        impl TryFrom<&TxoInfo> for SerializeTxoInfo {
-            type Error = miette::ErrReport;
-
-            fn try_from(
-                TxoInfo {
-                    tx_hash,
-                    txo_index,
-                    address,
-                    slot,
-                    coin,
-                }: &TxoInfo,
-            ) -> Result<Self, Self::Error> {
-                let address = match get_shelley_address(&address.to_vec()) {
-                    Some(addr) => addr.to_bech32().into_diagnostic()?,
-                    None => bail!("Could not convert address bytes in TxoInfo to Shelley address"),
-                };
-                Ok(SerializeTxoInfo {
-                    tx_hash: hex::encode(&tx_hash),
-                    txo_index: *txo_index,
-                    address,
-                    slot: *slot,
-                    coin: *coin,
-                })
-            }
-        }
-
-        SerializeTxoInfo::try_from(self)
-            .unwrap()
-            .serialize(serializer)
-    }
-}
 impl OutputFormatter for Vec<TxoInfo> {
     fn to_table(&self) {
         let mut table = Table::new();
@@ -200,20 +210,57 @@ pub fn block_ref_from_block(block: Block) -> miette::Result<BlockRef> {
     }
 }
 
-pub fn u64_from_db_vec(db_vec: &Vec<u8>) -> miette::Result<u64> {
+pub fn block_ref_from_model(block_history::Model { hash, slot }: block_history::Model) -> BlockRef {
+    BlockRef {
+        hash: hash.into(),
+        index: u64_from_db_vec(&slot).unwrap(),
+    }
+}
+
+fn serialize_bytes_as_hex<S>(bytes: &Bytes, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&hex::encode(&bytes))
+}
+
+fn serialize_big_int<S>(big_int: &BigInt, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&big_int.to_string())
+}
+
+fn serialize_address_as_shelley_bech32<S>(addr: &Bytes, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let address = match get_shelley_address(&addr.to_vec()) {
+        Some(addr) => addr
+            .to_bech32()
+            .map_err(|err| <S::Error as serde::ser::Error>::custom(format!("{err}"))),
+        None => Result::Err(<S::Error as serde::ser::Error>::custom(
+            "Could not convert address bytes in TxoInfo to Shelley address",
+        )),
+    };
+
+    address.and_then(|bech32_addr| serializer.serialize_str(&bech32_addr))
+}
+
+fn u64_from_db_vec(db_vec: &Vec<u8>) -> miette::Result<u64> {
     let arr = <[u8; 8]>::try_from(db_vec.as_slice()).into_diagnostic()?;
     Ok(u64::from_le_bytes(arr))
 }
 
-pub fn u64_to_db_vec(num: u64) -> Vec<u8> {
+fn u64_to_db_vec(num: u64) -> Vec<u8> {
     num.to_le_bytes().into()
 }
 
-pub fn big_int_to_db_vec(num: BigInt) -> Vec<u8> {
+fn big_int_to_db_vec(num: BigInt) -> Vec<u8> {
     num.to_signed_bytes_le()
 }
 
-pub fn big_int_from_db_vec(db_vec: &Vec<u8>) -> BigInt {
+fn big_int_from_db_vec(db_vec: &Vec<u8>) -> BigInt {
     BigInt::from_signed_bytes_le(&db_vec)
 }
 

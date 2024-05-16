@@ -1,12 +1,15 @@
 use clap::{Parser, Subcommand};
 use tracing::instrument;
 
+mod balance;
+mod block_history;
 pub mod config;
 mod create;
 mod dal;
 mod delete;
 mod info;
 mod list;
+mod transactions;
 mod update;
 mod utxos;
 
@@ -28,14 +31,15 @@ enum Commands {
     Update(update::Args),
     /// Delete a wallet. Caution!! This cannot be undone.
     Delete(delete::Args),
-    // /// show wallet history
-    // History(history::Args),
+    /// Show blocks this wallet has been involved in
+    BlockHistory(block_history::Args),
+    /// Show transactions this wallet has been involved in
+    #[command(alias = "txs")]
+    TxHistory(transactions::Args),
     /// List current utxos of a wallet
     Utxos(utxos::Args),
-    // /// select current utxos of a wallet
-    // Select(select::Args),
-    // /// show wallet balance
-    // Balance(balance::Args),
+    /// show wallet balance
+    Balance(balance::Args),
 }
 
 #[instrument("wallet", skip_all)]
@@ -50,9 +54,9 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
             update::run(args, ctx).await
         }
         Commands::Delete(args) => delete::run(args, ctx).await,
-        // Commands::History(args) => history::run(args).await,
+        Commands::BlockHistory(args) => block_history::run(args, ctx).await,
+        Commands::TxHistory(args) => transactions::run(args, ctx).await,
         Commands::Utxos(args) => utxos::run(args, ctx).await,
-        // Commands::Select(args) => select::run(args, ctx).await,
-        // Commands::Balance(args) => balance::run(args, ctx).await,
+        Commands::Balance(args) => balance::run(args, ctx).await,
     }
 }

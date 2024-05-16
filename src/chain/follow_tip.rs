@@ -98,7 +98,7 @@ async fn print_current_tip(
 ) -> miette::Result<()> {
     let tip = get_current_tip(utxo_cfg, intersect_refs).await?;
     match tip {
-        Some(tip) => tip.output(&ctx.output_format),
+        Some(tip) => vec![tip].output(&ctx.output_format),
         None => bail!("An error occured."),
     }
     Ok(())

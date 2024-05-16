@@ -1,6 +1,8 @@
+use entity::block_history;
 pub use entity::{prelude::*, protocol_parameters, recent_points, transaction, tx_history, utxo};
 use futures::future::{join_all, try_join_all};
 pub use migration::Migrator;
+use num_bigint::BigUint;
 use tracing::error;
 use utxorpc::spec::cardano::Block;
 use utxorpc::spec::sync::BlockRef;
@@ -147,7 +149,6 @@ impl WalletDB {
 
     // Transaction History
 
-    // TODO: balance type
     pub async fn insert_history_txs(&self, txs: &Vec<TransactionInfo>) -> Result<(), DbErr> {
         if txs.is_empty() {
             Ok(())
@@ -184,6 +185,16 @@ impl WalletDB {
                 .await
                 .map(|_| {})
         }
+    }
+
+    pub async fn paginate_block_history(
+        &self,
+        order: Order,
+        page_size: Option<u64>,
+    ) -> Paginator<'_, DatabaseConnection, SelectModel<block_history::Model>> {
+        BlockHistory::find()
+            .order_by(block_history::Column::Slot, order)
+            .paginate(&self.conn, page_size.unwrap_or(DEFAULT_PAGE_SIZE))
     }
 
     // Recent Points
@@ -240,53 +251,39 @@ impl WalletDB {
             .collect())
     }
 
-    pub async fn remove_recent_points_before_slot(&self, slot: u64) -> Result<(), DbErr> {
-        let txn = self.conn.begin().await?;
+    // TODO
+    // // Protocol Parameters
 
-        let point_models = RecentPoints::find()
-            .filter(Condition::all().add(recent_points::Column::Slot.lt(slot)))
-            .all(&txn)
-            .await?;
+    // pub async fn insert_protocol_parameters(
+    //     &self,
+    //     slot: u64,
+    //     tx_block_index: u16,
+    //     update_cbor: Vec<u8>,
+    // ) -> Result<(), DbErr> {
+    //     let pparams_model = entity::protocol_parameters::ActiveModel {
+    //         slot: sea_orm::ActiveValue::Set(slot as i64),
+    //         block_index: sea_orm::ActiveValue::Set(tx_block_index.into()),
+    //         update_cbor: sea_orm::ActiveValue::Set(update_cbor),
+    //         ..Default::default()
+    //     };
 
-        for point_model in point_models {
-            let _ = point_model.delete(&txn).await?;
-        }
+    //     let _ = ProtocolParameters::insert(pparams_model)
+    //         .exec(&self.conn)
+    //         .await?;
 
-        txn.commit().await
-    }
+    //     Ok(())
+    // }
 
-    // Protocol Parameters
+    // /// Fetch the CBOR of the most recent protocol parameters seen on-chain
+    // pub async fn fetch_latest_protocol_parameters(&self) -> Result<Option<Vec<u8>>, DbErr> {
+    //     let res = ProtocolParameters::find()
+    //         .order_by_desc(protocol_parameters::Column::Slot)
+    //         .order_by_desc(protocol_parameters::Column::BlockIndex)
+    //         .one(&self.conn)
+    //         .await?;
 
-    pub async fn insert_protocol_parameters(
-        &self,
-        slot: u64,
-        tx_block_index: u16,
-        update_cbor: Vec<u8>,
-    ) -> Result<(), DbErr> {
-        let pparams_model = entity::protocol_parameters::ActiveModel {
-            slot: sea_orm::ActiveValue::Set(slot as i64),
-            block_index: sea_orm::ActiveValue::Set(tx_block_index.into()),
-            update_cbor: sea_orm::ActiveValue::Set(update_cbor),
-            ..Default::default()
-        };
-
-        let _ = ProtocolParameters::insert(pparams_model)
-            .exec(&self.conn)
-            .await?;
-
-        Ok(())
-    }
-
-    /// Fetch the CBOR of the most recent protocol parameters seen on-chain
-    pub async fn fetch_latest_protocol_parameters(&self) -> Result<Option<Vec<u8>>, DbErr> {
-        let res = ProtocolParameters::find()
-            .order_by_desc(protocol_parameters::Column::Slot)
-            .order_by_desc(protocol_parameters::Column::BlockIndex)
-            .one(&self.conn)
-            .await?;
-
-        Ok(res.map(|r| r.update_cbor))
-    }
+    //     Ok(res.map(|r| r.update_cbor))
+    // }
 
     // Rollback
 
