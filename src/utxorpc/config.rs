@@ -39,13 +39,21 @@ impl Utxorpc {
         })
     }
 
-    pub fn update(&mut self, url: Option<Url>, headers: Option<Vec<(String, String)>>) {
+    pub fn update(
+        &mut self,
+        url: Option<Url>,
+        headers: Option<Vec<(String, String)>>,
+        is_testnet: Option<bool>,
+    ) {
         if let Some(url) = url {
             self.url = url;
         }
         if let Some(headers) = headers {
             self.headers = headers;
         }
+        if let Some(is_testnet) = is_testnet {
+            self.is_testnet = is_testnet
+        };
         self.last_updated = Local::now();
     }
 }
