@@ -51,23 +51,6 @@ impl Wallet {
         })
     }
 
-    pub fn update(
-        &mut self,
-        keys: Option<Keys>,
-        addresses: Option<Addresses>,
-        utxorpc_config: Option<ConfigName>,
-    ) {
-        if let Some(keys) = keys {
-            self.keys = keys;
-        }
-        if let Some(addresses) = addresses {
-            self.addresses = addresses;
-        }
-        if let Some(utxorpc_config) = utxorpc_config {
-            self.utxorpc_config = utxorpc_config;
-        }
-    }
-
     pub fn address(&self, utxo_config: &Utxorpc) -> &str {
         if utxo_config.is_testnet {
             &self.addresses.testnet

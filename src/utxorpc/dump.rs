@@ -9,14 +9,17 @@ use crate::{
 
 #[derive(Parser)]
 pub struct Args {
+    /// Name of the UTxO RPC config to use
     utxorpc_config: String,
-    limit: u32,
+    /// Dump from this index
     #[arg(requires = "hash")]
     index: Option<u64>,
+    /// Dump from this hash
     #[arg(requires = "index")]
     hash: Option<String>,
-    #[arg(short, long, default_value = "1")]
-    pages: u32,
+    /// Number of blocks to fetch in each page
+    #[arg(short, long, default_value = "5")]
+    page_size: u32,
 }
 
 pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
@@ -26,14 +29,14 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     let start = match (args.index, args.hash) {
         (Some(index), Some(hash)) => Some(BlockRef {
             index,
-            hash: hash.into(),
+            hash: hex::decode(&hash).into_diagnostic()?.into(),
         }),
         _ => None,
     };
 
     match utxo_cfg {
         None => bail!(r#"No UTxO config named "{}" exists."#, name.raw),
-        Some(cfg) => print_paginated_history(ctx, &cfg, start, args.limit, args.pages).await,
+        Some(cfg) => print_paginated_history(ctx, &cfg, start, args.page_size).await,
     }
 }
 
@@ -41,21 +44,21 @@ pub async fn print_paginated_history(
     ctx: &crate::Context,
     utxo_cfg: &Utxorpc,
     mut start: Option<BlockRef>,
-    limit: u32,
-    pages: u32,
+    page_size: u32,
 ) -> miette::Result<()> {
-    for page_idx in 0..pages {
+    let mut client = build_client(utxo_cfg).await?;
+
+    loop {
         // Get and print page
-        let page = dump_history(utxo_cfg, &start, limit).await?;
+        let page = dump_history_page(&mut client, start.clone(), page_size).await?;
         for block in page.items {
             block.output(&ctx.output_format);
         }
 
-        if page_idx > 0
-            && !inquire::Confirm::new("Get next page?")
-                .with_default(true)
-                .prompt()
-                .into_diagnostic()?
+        if !inquire::Confirm::new("Get next page?")
+            .with_default(true)
+            .prompt()
+            .into_diagnostic()?
         {
             break;
         } else {
@@ -69,23 +72,23 @@ pub async fn print_paginated_history(
     Ok(())
 }
 
-pub async fn dump_history(
-    utxo_cfg: &Utxorpc,
-    start: &Option<BlockRef>,
-    limit: u32,
-) -> miette::Result<HistoryPage<Cardano>> {
+pub async fn build_client(utxo_cfg: &Utxorpc) -> miette::Result<CardanoSyncClient> {
     let mut client = ClientBuilder::new().uri(&utxo_cfg.url).into_diagnostic()?;
 
     for (header, value) in utxo_cfg.headers.iter() {
         client = client.metadata(header, value).into_diagnostic()?;
     }
 
-    let mut client = client.build::<CardanoSyncClient>().await;
+    Ok(client.build::<CardanoSyncClient>().await)
+}
 
-    let page = client
+pub async fn dump_history_page(
+    client: &mut CardanoSyncClient,
+    start: Option<BlockRef>,
+    limit: u32,
+) -> miette::Result<HistoryPage<Cardano>> {
+    client
         .dump_history(start.clone(), limit)
         .await
-        .into_diagnostic()?;
-
-    Ok(page)
+        .into_diagnostic()
 }

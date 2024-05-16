@@ -3,7 +3,7 @@ use ::utxorpc::{
         cardano::{Block, BlockBody, BlockHeader, Tx},
         sync::BlockRef,
     },
-    Cardano, HistoryPage, TipEvent,
+    Cardano, CardanoSyncClient, HistoryPage, TipEvent,
 };
 use clap::Parser;
 use futures::future::join_all;
@@ -21,8 +21,7 @@ use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
     utils::Config,
-    utxorpc,
-    utxorpc::config::Utxorpc,
+    utxorpc::{self, config::Utxorpc, dump::build_client},
     wallet::{self, config::Wallet},
 };
 
@@ -54,7 +53,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     let start = match (args.from_slot, args.from_hash) {
         (Some(slot), Some(hash)) => Some(BlockRef {
             index: slot,
-            hash: hash.into(),
+            hash: hex::decode(&hash).into_diagnostic()?.into(),
         }),
         _ => find_intersect(utxo_cfg.clone(), &wallet_db).await?,
     };
@@ -154,8 +153,10 @@ async fn update(
         )?,
     ));
 
+    let mut utxo_client = build_client(&utxo_cfg).await?;
+
     loop {
-        let page = get_history_page(&utxo_cfg, &start, page_limit).await?;
+        let page = get_history_page(&mut utxo_client, start.clone(), page_limit).await?;
         tx.send(Some(page.items)).into_diagnostic()?;
 
         if page.next.is_none() {
@@ -172,14 +173,14 @@ async fn update(
 }
 
 async fn get_history_page(
-    utxo_cfg: &Utxorpc,
-    start: &Option<BlockRef>,
+    client: &mut CardanoSyncClient,
+    start: Option<BlockRef>,
     page_size: u32,
 ) -> miette::Result<HistoryPage<Cardano>> {
     let start_slot = start.as_ref().map_or(0, |b| b.index);
     trace!("Getting history dump starting from {}.", start_slot);
 
-    let page = utxorpc::dump::dump_history(&utxo_cfg, &start, page_size).await?;
+    let page = utxorpc::dump::dump_history_page(client, start, page_size).await?;
 
     let end_slot = page
         .next
