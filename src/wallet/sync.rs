@@ -480,13 +480,6 @@ fn collect_txo_info(
             }
         };
 
-        let wallet_address: &ShelleyAddress = &{
-            match Address::from_bech32("addr_test1qruz6kukvj0rnr0620smkv3p8ekvnxgjnczfzu9xv4ukp05h7huldxem7fft59uvskelkzwsr04pc76s98gf0nrgwzqqspyzld").unwrap() {
-            Address::Shelley(addr) => addr,
-            _ => panic!("Test addr could not be parsed into a Shelley address."),
-          } // TODO
-        };
-
         if utxo_addr == *wallet_address {
             // TODO: Use payment part or full address?
             let info = TxoInfo {
