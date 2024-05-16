@@ -1,20 +1,16 @@
 use entity::block_history;
 pub use entity::{prelude::*, protocol_parameters, recent_points, transaction, tx_history, utxo};
-use futures::future::{join_all, try_join_all};
+use futures::future::try_join_all;
 pub use migration::Migrator;
-use num_bigint::BigUint;
-use tracing::error;
-use utxorpc::spec::cardano::Block;
-use utxorpc::spec::sync::BlockRef;
-
-use std::num;
-use std::path::{Path, PathBuf};
-
 use pallas::ledger::addresses::Address;
 use sea_orm::entity::prelude::*;
 use sea_orm::{Condition, Database, Order, Paginator, QueryOrder, SelectModel, TransactionTrait};
 use sea_orm_migration::MigratorTrait;
+use std::path::{Path, PathBuf};
+use tracing::error;
 use types::{TransactionInfo, TxoInfo};
+use utxorpc::spec::cardano::Block;
+use utxorpc::spec::sync::BlockRef;
 
 pub mod types;
 
@@ -388,7 +384,7 @@ impl WalletDB {
 mod tests {
     use pallas::ledger::{
         primitives::babbage::TransactionInput,
-        traverse::{Era, MultiEraInput, MultiEraOutput},
+        traverse::{Era, MultiEraOutput},
     };
     use sea_orm::{Database, Order};
 

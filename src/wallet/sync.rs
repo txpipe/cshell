@@ -1,7 +1,14 @@
+use ::utxorpc::{
+    spec::{
+        cardano::{Block, BlockBody, BlockHeader, Tx},
+        sync::BlockRef,
+    },
+    Cardano, HistoryPage, TipEvent,
+};
 use clap::Parser;
 use futures::future::join_all;
 use hex::ToHex;
-use miette::{bail, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic};
 use num_bigint::BigInt;
 use pallas::{
     applying::utils::get_shelley_address,
@@ -11,17 +18,10 @@ use prost::bytes::Bytes;
 use std::sync::{mpsc::Receiver, mpsc::Sender};
 use tokio::join;
 use tracing::{debug, info, instrument, trace, warn};
-use utxorpc::{
-    spec::{
-        cardano::{Block, BlockBody, BlockHeader, Tx},
-        sync::BlockRef,
-    },
-    Cardano, HistoryPage, TipEvent,
-};
 
 use crate::{
-    chain,
     utils::Config,
+    utxorpc,
     utxorpc::config::Utxorpc,
     wallet::{self, config::Wallet},
 };
@@ -113,7 +113,7 @@ async fn find_intersect(
     if intersect_refs.is_empty() {
         Ok(None)
     } else {
-        let mut live_tip = chain::follow_tip::follow_tip(utxo_cfg, intersect_refs).await?;
+        let mut live_tip = utxorpc::follow_tip::follow_tip(utxo_cfg, intersect_refs).await?;
 
         loop {
             match live_tip
@@ -180,7 +180,7 @@ async fn get_history_page(
     let start_slot = start.as_ref().map_or(0, |b| b.index);
     trace!("Getting history dump starting from {}.", start_slot);
 
-    let page = chain::dump::dump_history(&utxo_cfg, &start, page_size).await?;
+    let page = utxorpc::dump::dump_history(&utxo_cfg, &start, page_size).await?;
 
     let end_slot = page
         .next

@@ -5,16 +5,9 @@ use crate::{
 };
 use chrono::{DateTime, Local};
 use comfy_table::Table;
-use futures::Future;
-use miette::{Context, IntoDiagnostic};
-use pallas::ledger::{
-    addresses::ShelleyAddress,
-    traverse::{Era, MultiEraOutput},
-};
 use serde::{Deserialize, Serialize};
 
 use crate::utils::OutputFormatter;
-use entity::utxo::Model as UtxoModel;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Addresses {
@@ -145,39 +138,6 @@ impl OutputFormatter for Vec<Wallet> {
 
     fn to_json(&self) {
         let json: String = serde_json::to_string_pretty(self).unwrap();
-        println!("{json}");
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct BalanceView {
-    pub lovelace: u64,
-    pub tokens: Vec<(String, u64)>,
-}
-
-impl BalanceView {
-    pub fn new(lovelace: u64, tokens: Vec<(String, u64)>) -> Self {
-        Self { lovelace, tokens }
-    }
-}
-
-impl OutputFormatter for BalanceView {
-    fn to_table(&self) {
-        let mut table = Table::new();
-
-        table.set_header(vec!["token", "amount"]);
-
-        table.add_row(vec!["lovelace".to_string(), self.lovelace.to_string()]);
-
-        for (token, amount) in &self.tokens {
-            table.add_row(vec![token, &amount.to_string()]);
-        }
-
-        println!("{table}");
-    }
-
-    fn to_json(&self) {
-        let json = serde_json::to_string_pretty(self).unwrap();
         println!("{json}");
     }
 }

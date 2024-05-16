@@ -1,9 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::{borrow::Borrow, path::PathBuf};
-use tracing::Level;
 use tracing_indicatif::IndicatifLayer;
 use tracing_subscriber::{filter::LevelFilter, prelude::*};
-mod chain;
 mod dirs;
 mod transaction;
 mod utils;
@@ -46,7 +44,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Configure a UTxO RPC endpoint to use to interact with a chain
+    /// Configure or use a UTxO RPC service
     #[command(alias = "u5c")]
     Utxorpc(utxorpc::Args),
 
@@ -56,9 +54,6 @@ enum Commands {
 
     /// Manage Wallets
     Wallet(wallet::Args),
-
-    /// Interact with the chain through a UTxO RPC config
-    Chain(chain::Args),
 }
 
 #[derive(ValueEnum, Clone)]
@@ -133,6 +128,5 @@ async fn main() -> miette::Result<()> {
         Commands::Utxorpc(args) => utxorpc::run(args, &ctx).await,
         Commands::Transaction(args) => transaction::run(args, &ctx).await,
         Commands::Wallet(args) => wallet::run(args, &ctx).await,
-        Commands::Chain(args) => chain::run(args, &ctx).await,
     }
 }

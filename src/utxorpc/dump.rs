@@ -7,8 +7,6 @@ use crate::{
     utxorpc::config::Utxorpc,
 };
 
-use super::utils;
-
 #[derive(Parser)]
 pub struct Args {
     utxorpc_config: String,
@@ -26,7 +24,10 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     let utxo_cfg = Utxorpc::load(&ctx.dirs, &name).await?;
 
     let start = match (args.index, args.hash) {
-        (Some(index), Some(hash)) => Some(utils::block_ref(index, hash)),
+        (Some(index), Some(hash)) => Some(BlockRef {
+            index,
+            hash: hash.into(),
+        }),
         _ => None,
     };
 

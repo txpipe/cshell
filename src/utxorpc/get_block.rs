@@ -2,7 +2,7 @@ use clap::Parser;
 use miette::{bail, IntoDiagnostic};
 use utxorpc::{
     spec::{
-        cardano::{Block, BlockBody},
+        cardano::Block,
         sync::{any_chain_block, AnyChainBlock, BlockRef, FetchBlockRequest},
     },
     CardanoSyncClient, ClientBuilder,
@@ -12,8 +12,6 @@ use crate::{
     utils::{Config, ConfigName},
     utxorpc::config::Utxorpc,
 };
-
-use super::utils;
 
 #[derive(Parser)]
 pub struct Args {
@@ -26,7 +24,10 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     let name = ConfigName::new(args.utxorpc_config)?;
     let utxo_cfg = Utxorpc::load(&ctx.dirs, &name).await?;
 
-    let block_ref = utils::block_ref(args.index, args.hash);
+    let block_ref = BlockRef {
+        index: args.index,
+        hash: args.hash.into(),
+    };
 
     match utxo_cfg {
         None => bail!(r#"No UTxO config named "{}" exists."#, name.raw),
