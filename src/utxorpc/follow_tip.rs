@@ -122,7 +122,7 @@ pub async fn get_current_tip(
             {
                 TipEvent::Apply(block) => {
                     tx.send(BlockRef {
-                        index: block.header.as_ref().unwrap().slot, // TODO
+                        index: block.header.as_ref().unwrap().slot,
                         hash: block.header.unwrap().hash,
                     })
                     .into_diagnostic()

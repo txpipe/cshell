@@ -153,8 +153,6 @@ impl Deref for ConfigName {
 }
 
 // Output formats
-
-// TODO: Move OutputFormat here
 pub trait OutputFormatter {
     fn to_table(&self);
     fn to_json(&self);

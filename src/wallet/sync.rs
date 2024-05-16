@@ -152,7 +152,6 @@ async fn update(
         types::shelley_addr_from_general(
             Address::from_bech32(wallet.address(&utxo_cfg)).into_diagnostic()?,
         )?,
-        utxo_cfg.clone(),
     ));
 
     loop {
@@ -197,12 +196,11 @@ async fn page_consumer(
     rx: Receiver<Option<Vec<Block>>>,
     wallet_db: WalletDB,
     wallet_address: ShelleyAddress,
-    utxo_cfg: Utxorpc,
 ) -> miette::Result<()> {
     let mut total_blocks = 0;
 
     while let Some(items) = rx.recv().into_diagnostic()? {
-        let data = collect_data_from_page(&wallet_db, &wallet_address, &utxo_cfg, &items).await;
+        let data = collect_data_from_page(&wallet_db, &wallet_address, &items).await;
 
         if data.has_data() {
             debug!(
@@ -263,7 +261,6 @@ async fn persist_recent_points(
 async fn collect_data_from_page(
     wallet_db: &WalletDB,
     wallet_address: &ShelleyAddress,
-    utxo_cfg: &Utxorpc,
     history_items: &Vec<Block>,
 ) -> ChainProcessingData {
     trace!(
@@ -286,7 +283,9 @@ async fn collect_data_from_page(
         .flat_map(|block| match (&block.header, &block.body) {
             (Some(header), Some(body)) => Some((block, header, body)),
             _ => {
-                println!("Uh oh! A block header or body was not found."); // TODO
+                warn!(
+                    "A block was found that either did not have a header or did not have a body."
+                );
                 None
             }
         });

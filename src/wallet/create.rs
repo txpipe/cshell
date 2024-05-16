@@ -56,25 +56,19 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     let mainnet_address = ShelleyAddress::new(
         Network::Mainnet,
         ShelleyPaymentPart::key_hash(pkh.into()),
-        ShelleyDelegationPart::Null, // TODO: Do we need a delegation part?
+        ShelleyDelegationPart::Null,
     );
 
     let testnet_address = ShelleyAddress::new(
         Network::Testnet,
         ShelleyPaymentPart::key_hash(pkh.into()),
-        ShelleyDelegationPart::Null, // TODO: Do we need a delegation part?
+        ShelleyDelegationPart::Null,
     );
 
     let addresses = wallet::config::Addresses {
         mainnet: mainnet_address.to_bech32().into_diagnostic()?,
         testnet: testnet_address.to_bech32().into_diagnostic()?,
     };
-
-    // TODO: Update SQLite with the new wallet info.
-    // let db = wallet::dal::WalletDB::open(&args.name, &wallet_path)
-    // .await
-    // .into_diagnostic()?;
-    // db.migrate_up().await.into_diagnostic()?;
 
     // Save wallet config
     let wallet = wallet::config::Wallet::new(

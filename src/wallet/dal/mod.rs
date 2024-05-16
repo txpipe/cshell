@@ -247,7 +247,8 @@ impl WalletDB {
             .collect())
     }
 
-    // TODO
+    // TODO: Record that I deleted protocol parameters
+    // TODO: Check if protocol parameters are still in the DB
     // // Protocol Parameters
 
     // pub async fn insert_protocol_parameters(
@@ -436,7 +437,7 @@ mod tests {
             (hash_1, index_1, utxo_1, slot_1, Era::Alonzo),
         ];
 
-        // wallet_db.insert_utxos(utxos).await.unwrap(); // TODO
+        // wallet_db.insert_utxos(utxos).await.unwrap(); // TODO: Updte tests
 
         let now_utxos = wallet_db
             .paginate_utxos(Order::Asc, None)
@@ -495,7 +496,7 @@ mod tests {
         //             .collect(),
         //     )
         //     .await
-        //     .unwrap(); // TODO
+        //     .unwrap(); // TODO: Update tests
 
         let now_utxos = wallet_db
             .paginate_utxos(Order::Asc, None)

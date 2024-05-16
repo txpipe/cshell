@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use comfy_table::Table;
 use entity::{block_history, recent_points, tx_history, utxo};
 use miette::{bail, IntoDiagnostic};

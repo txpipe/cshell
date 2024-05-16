@@ -3,7 +3,7 @@ use miette::{bail, IntoDiagnostic};
 use utxorpc::{spec::sync::BlockRef, Cardano, CardanoSyncClient, ClientBuilder, HistoryPage};
 
 use crate::{
-    utils::{Config, ConfigName},
+    utils::{Config, ConfigName, OutputFormatter},
     utxorpc::config::Utxorpc,
 };
 
@@ -33,11 +33,12 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
 
     match utxo_cfg {
         None => bail!(r#"No UTxO config named "{}" exists."#, name.raw),
-        Some(cfg) => print_paginated_history(&cfg, start, args.limit, args.pages).await,
+        Some(cfg) => print_paginated_history(ctx, &cfg, start, args.limit, args.pages).await,
     }
 }
 
 pub async fn print_paginated_history(
+    ctx: &crate::Context,
     utxo_cfg: &Utxorpc,
     mut start: Option<BlockRef>,
     limit: u32,
@@ -47,10 +48,7 @@ pub async fn print_paginated_history(
         // Get and print page
         let page = dump_history(utxo_cfg, &start, limit).await?;
         for block in page.items {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&block).into_diagnostic()?
-            ) // TODO: Use OUTPUT_FORMAT
+            block.output(&ctx.output_format);
         }
 
         if page_idx > 0
