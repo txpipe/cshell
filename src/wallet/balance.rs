@@ -11,7 +11,8 @@ use super::{
 
 #[derive(Parser)]
 pub struct Args {
-    /// Name of the wallet to query
+    /// Name of the wallet to show the balance of
+    #[arg(env = "CSHELL_WALLET")]
     wallet: String,
 }
 

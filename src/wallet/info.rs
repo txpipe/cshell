@@ -7,7 +7,8 @@ use crate::utils::{Config, ConfigName, OutputFormatter};
 
 #[derive(Parser)]
 pub struct Args {
-    /// Name of the wallet to show.
+    /// Name of the wallet to show info for
+    #[arg(env = "CSHELL_WALLET")]
     name: String,
 }
 

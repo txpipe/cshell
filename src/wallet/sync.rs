@@ -33,7 +33,8 @@ use super::dal::{
 
 #[derive(Parser)]
 pub struct Args {
-    /// Name of the wallet that will have its history updated
+    /// Name of the wallet to sync with the chain
+    #[arg(env = "CSHELL_WALLET")]
     wallet: String,
     /// Update from the block with this slot
     #[arg(long, requires = "from_hash")]
