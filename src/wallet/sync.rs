@@ -15,7 +15,7 @@ use pallas::{
     ledger::addresses::{Address, ShelleyAddress},
 };
 use prost::bytes::Bytes;
-use std::sync::{mpsc::Receiver, mpsc::Sender};
+use std::sync::{mpsc::Receiver, mpsc::SyncSender};
 use tokio::join;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -63,26 +63,26 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         < wallet_db
             .get_most_recent_point()
             .await
-            .into_diagnostic()?
+            .into_diagnostic()
+            .context("Getting most recent point from DB")?
             .map(|p| p.index)
             .unwrap_or(0)
     {
         info!("Rolling back DB to slot {}", start_slot);
-        if let Some(start_ref) = start.as_ref() {
-            wallet_db
-                .rollback_to_slot(start_ref.index)
-                .await
-                .into_diagnostic()
-                .context("Rolling back DB")?;
-        }
+
+        wallet_db
+            .rollback_to_slot(start_slot)
+            .await
+            .into_diagnostic()
+            .context("Rolling back DB")?;
     }
 
     info!(
-        "Updating from slot {}",
+        "Syncing from slot {}",
         start.as_ref().map(|s| s.index).unwrap_or(0)
     );
 
-    update(wallet_db, &wallet, utxo_cfg, start, args.page_size).await
+    sync(wallet_db, &wallet, utxo_cfg, start, args.page_size).await
 }
 
 async fn get_cfg_and_db(
@@ -99,6 +99,7 @@ async fn get_cfg_and_db(
 }
 
 // This has not been tested yet due to issues with the Demeter u5c port
+#[instrument(skip_all)]
 async fn find_intersect(
     utxo_cfg: Utxorpc,
     wallet_db: &WalletDB,
@@ -112,7 +113,9 @@ async fn find_intersect(
     if intersect_refs.is_empty() {
         Ok(None)
     } else {
-        let mut live_tip = utxorpc::follow_tip::follow_tip(utxo_cfg, intersect_refs).await?;
+        let mut live_tip = utxorpc::follow_tip::follow_tip(utxo_cfg, intersect_refs)
+            .await
+            .context("Following tip to get block ref to sync from")?;
 
         loop {
             match live_tip
@@ -122,28 +125,48 @@ async fn find_intersect(
                 .context("Following tip to find intersect for update")?
             {
                 TipEvent::Apply(block) => {
+                    trace!(
+                        "Tip event -- Apply slot {}",
+                        block
+                            .header
+                            .as_ref()
+                            .map(|h| h.slot.to_string())
+                            .unwrap_or("Unknown".to_owned())
+                    );
                     return Ok(Some(
                         types::block_ref_from_block(block)
                             .context("Following tip to get intersect for update")?,
-                    ))
+                    ));
                 }
-                TipEvent::Reset(block_ref) => return Ok(Some(block_ref)),
-                TipEvent::Undo(_) => {}
+                TipEvent::Reset(block_ref) => {
+                    trace!("Tip event -- Reset to slot {}", block_ref.index);
+                    return Ok(Some(block_ref));
+                }
+                TipEvent::Undo(block) => {
+                    trace!(
+                        "Tip event -- Undo slot {}",
+                        block
+                            .header
+                            .as_ref()
+                            .map(|h| h.slot.to_string())
+                            .unwrap_or("Unknown".to_owned())
+                    )
+                }
             }
         }
     }
 }
 
 #[instrument(skip_all, fields(wallet = wallet.name.raw, utxo_cfg = utxo_cfg.name.raw))]
-async fn update(
+async fn sync(
     wallet_db: WalletDB,
     wallet: &Wallet,
     utxo_cfg: Utxorpc,
     mut start: Option<BlockRef>,
     page_limit: u32,
 ) -> miette::Result<()> {
-    let (tx, rx): (Sender<Option<Vec<Block>>>, Receiver<Option<Vec<Block>>>) =
-        std::sync::mpsc::channel();
+    let (tx, rx): (SyncSender<Option<Vec<Block>>>, Receiver<Option<Vec<Block>>>) =
+        std::sync::mpsc::sync_channel(3);
 
     let consumer_handle = tokio::spawn(page_consumer(
         rx,
@@ -157,7 +180,20 @@ async fn update(
 
     loop {
         let page = get_history_page(&mut utxo_client, start.clone(), page_limit).await?;
-        tx.send(Some(page.items)).into_diagnostic()?;
+        let send_res = tx.send(Some(page.items)).into_diagnostic();
+        // Improve error messages by failing on the `page_consumer` error
+        // if it exists instead of the `SyncSender` error
+        if send_res.is_err() {
+            if consumer_handle.is_finished() {
+                return consumer_handle
+                    .await
+                    .into_diagnostic()
+                    .and_then(|inner_res| inner_res)
+                    .and(send_res);
+            } else {
+                return send_res;
+            }
+        }
 
         if page.next.is_none() {
             tx.send(None).into_diagnostic()?;
@@ -172,6 +208,7 @@ async fn update(
     Ok(())
 }
 
+#[instrument(skip_all)]
 async fn get_history_page(
     client: &mut CardanoSyncClient,
     start: Option<BlockRef>,
@@ -180,7 +217,9 @@ async fn get_history_page(
     let start_slot = start.as_ref().map_or(0, |b| b.index);
     trace!("Getting history dump starting from {}.", start_slot);
 
-    let page = utxorpc::dump::dump_history_page(client, start, page_size).await?;
+    let page = utxorpc::dump::dump_history_page(client, start, page_size)
+        .await
+        .context("Getting history page")?;
 
     let end_slot = page
         .next
@@ -396,7 +435,7 @@ async fn get_used_inputs_as_txo_infos(wallet_db: &WalletDB, tx: &Tx, slot: u64) 
                 .as_ref()
                 .map(|output| TxoInfo::from_tx_input_output(output, input, slot));
 
-            // as_output seems to be broken so try to fetch the TxOutput info for this input from the DB
+            // TODO: as_output seems to be broken so try to fetch the TxOutput info for this input from the DB
             let resolved_from_db = match resolved_from_as_output {
                 Some(resolved) => Some(resolved),
                 None => {
