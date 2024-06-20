@@ -1,1 +1,6 @@
+# Build artifacts
 /target
+
+# Nix
+.env
+shell.nix

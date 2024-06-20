@@ -199,7 +199,7 @@ impl WalletDB {
         let models = points
             .into_iter()
             .map(|(slot, hash)| entity::recent_points::ActiveModel {
-                slot: sea_orm::ActiveValue::Set(slot as i64), // TODO Why i64?
+                slot: sea_orm::ActiveValue::Set(slot as i64),
                 block_hash: sea_orm::ActiveValue::Set(hash),
             });
 
@@ -247,41 +247,6 @@ impl WalletDB {
             .collect())
     }
 
-    // TODO: Record that I deleted protocol parameters
-    // TODO: Check if protocol parameters are still in the DB
-    // // Protocol Parameters
-
-    // pub async fn insert_protocol_parameters(
-    //     &self,
-    //     slot: u64,
-    //     tx_block_index: u16,
-    //     update_cbor: Vec<u8>,
-    // ) -> Result<(), DbErr> {
-    //     let pparams_model = entity::protocol_parameters::ActiveModel {
-    //         slot: sea_orm::ActiveValue::Set(slot as i64),
-    //         block_index: sea_orm::ActiveValue::Set(tx_block_index.into()),
-    //         update_cbor: sea_orm::ActiveValue::Set(update_cbor),
-    //         ..Default::default()
-    //     };
-
-    //     let _ = ProtocolParameters::insert(pparams_model)
-    //         .exec(&self.conn)
-    //         .await?;
-
-    //     Ok(())
-    // }
-
-    // /// Fetch the CBOR of the most recent protocol parameters seen on-chain
-    // pub async fn fetch_latest_protocol_parameters(&self) -> Result<Option<Vec<u8>>, DbErr> {
-    //     let res = ProtocolParameters::find()
-    //         .order_by_desc(protocol_parameters::Column::Slot)
-    //         .order_by_desc(protocol_parameters::Column::BlockIndex)
-    //         .one(&self.conn)
-    //         .await?;
-
-    //     Ok(res.map(|r| r.update_cbor))
-    // }
-
     // Rollback
 
     /// Remove all records from WalletDB created for slots after the specified
@@ -292,7 +257,7 @@ impl WalletDB {
         // UTxOs
 
         let point_models = RecentPoints::find()
-            .filter(Condition::all().add(recent_points::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(recent_points::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
@@ -303,7 +268,7 @@ impl WalletDB {
         // Transaction History
 
         let tx_models = TxHistory::find()
-            .filter(Condition::all().add(tx_history::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(tx_history::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
@@ -314,7 +279,7 @@ impl WalletDB {
         // Recent Points
 
         let points_models = RecentPoints::find()
-            .filter(Condition::all().add(recent_points::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(recent_points::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
@@ -325,13 +290,15 @@ impl WalletDB {
         // Protocol Parameters
 
         let pparams_models = ProtocolParameters::find()
-            .filter(Condition::all().add(protocol_parameters::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(protocol_parameters::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
         for pparams_model in pparams_models {
             let _ = pparams_model.delete(&txn).await?;
         }
+
+        txn.commit().await?;
 
         Ok(())
     }
@@ -383,17 +350,55 @@ impl WalletDB {
 }
 #[cfg(test)]
 mod tests {
-    use pallas::ledger::{
-        primitives::babbage::TransactionInput,
-        traverse::{Era, MultiEraOutput},
-    };
+    use miette::IntoDiagnostic;
+    use pallas::ledger::addresses::Address;
+    use prost::bytes::Bytes;
     use sea_orm::{Database, Order};
+
+    use crate::wallet::dal::types::TxoInfo;
 
     use super::WalletDB;
 
+    fn tx_hash() -> Vec<u8> {
+        hex::decode("5d588bb46091b249f0f6874e97e3738d16e4f20f250242d6e08a93ccbf0d0e30")
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+    fn address_0() -> Vec<u8> {
+        Address::from_bech32("addr1qypqwaxc9suh9g20jvv50mqkmp3gat6z890mz87g8u20eln6umxsn8n3dp3dzfc0v8jswnxddjr9unvcv6mv0cf0knjsh0j3cv")
+          .into_diagnostic()
+          .unwrap()
+          .to_vec()
+    }
+    fn address_1() -> Vec<u8> {
+        Address::from_bech32("addr1qxq47au29wss4g8acjk0zsmwwq0h34hhzump6stye9wuldm7nm0t6ad3jz9hy5v3smye0nvcumtzu43k7r36ag0w29qqdafvvk")
+        .into_diagnostic()
+        .unwrap()
+        .to_vec()
+    }
+    fn test_utxos() -> Vec<TxoInfo> {
+        vec![
+            TxoInfo {
+                tx_hash: Bytes::copy_from_slice(&tx_hash()),
+                txo_index: 0,
+                address: Bytes::copy_from_slice(&address_0()),
+                slot: 49503576,
+                coin: 55476850,
+            },
+            TxoInfo {
+                tx_hash: Bytes::copy_from_slice(&tx_hash()),
+                txo_index: 1,
+                address: Bytes::copy_from_slice(&address_1()),
+                slot: 49503576,
+                coin: 1375000,
+            },
+        ]
+    }
+
     #[tokio::test]
     async fn insert_utxos() {
-        let sqlite_url = format!("sqlite:/tmp/test_insert_utxos.sqlite?mode=rwc");
+        let sqlite_url = format!("sqlite::memory:?mode=rwc");
         let db = Database::connect(&sqlite_url).await.unwrap();
 
         let wallet_db = WalletDB {
@@ -412,32 +417,8 @@ mod tests {
 
         assert!(init_utxos.is_empty());
 
-        let hash_0: [u8; 32] =
-            hex::decode("5d588bb46091b249f0f6874e97e3738d16e4f20f250242d6e08a93ccbf0d0e30")
-                .unwrap()
-                .try_into()
-                .unwrap();
-        let index_0 = 2;
-        let utxo_cbor_0 = hex::decode("82583901576aefddef29b4168f74b78879404b62e98ce7b761874130fb48b996096c02a359fc0ab647b202a0351269ea72e84061b2ad3b40f00067c4821a00169b08a1581cec2e1c314ee754cea4ba3afc69f74b2130f87bb3928e1a1e8534c209a14f526167696e675465656e303331313901").unwrap();
-        let utxo_0 = MultiEraOutput::decode(Era::Alonzo, &utxo_cbor_0).unwrap();
-        let slot_0 = 49503576;
-
-        let hash_1: [u8; 32] =
-            hex::decode("5d588bb46091b249f0f6874e97e3738d16e4f20f250242d6e08a93ccbf0d0e30")
-                .unwrap()
-                .try_into()
-                .unwrap();
-        let index_1 = 3;
-        let utxo_cbor_1 = hex::decode("82583901576aefddef29b4168f74b78879404b62e98ce7b761874130fb48b996096c02a359fc0ab647b202a0351269ea72e84061b2ad3b40f00067c4821a0c507ff2a4581cb000e9f3994de3226577b4d61280994e53c07948c8839d628f4a425aa14f436c756d737947686f73747335343501581cc364930bd612f42e14d156e1c5410511e77f64cab8f2367a9df544d1a154426f7373436174526f636b6574436c756238393001581cec2e1c314ee754cea4ba3afc69f74b2130f87bb3928e1a1e8534c209af4e526167696e675465656e30303132014f526167696e675465656e3030383838014f526167696e675465656e3031303834014f526167696e675465656e3031333836014f526167696e675465656e3031363330014f526167696e675465656e3031363434014f526167696e675465656e3031393435014f526167696e675465656e3031393933014f526167696e675465656e3032333535014f526167696e675465656e3032363533014f526167696e675465656e3033303233014f526167696e675465656e3033353633014f526167696e675465656e3033383039014f526167696e675465656e3034313731014f526167696e675465656e303437393201581cf0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9aa14b63617264616e6f2e61646101").unwrap();
-        let utxo_1 = MultiEraOutput::decode(Era::Alonzo, &utxo_cbor_1).unwrap();
-        let slot_1 = 49503576;
-
-        let utxos = vec![
-            (hash_0, index_0, utxo_0, slot_0, Era::Alonzo),
-            (hash_1, index_1, utxo_1, slot_1, Era::Alonzo),
-        ];
-
-        // wallet_db.insert_utxos(utxos).await.unwrap(); // TODO: Updte tests
+        let utxos = test_utxos();
+        wallet_db.insert_utxos(&utxos).await.unwrap();
 
         let now_utxos = wallet_db
             .paginate_utxos(Order::Asc, None)
@@ -445,20 +426,16 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(now_utxos.len(), 2);
-        assert_eq!(now_utxos[0].txo_index, 2);
+        assert_eq!(now_utxos.len(), utxos.len());
+        assert_eq!(now_utxos[0].txo_index, 0);
         assert_eq!(now_utxos[0].slot, 49503576);
-        assert_eq!(now_utxos[1].txo_index, 3);
+        assert_eq!(now_utxos[1].txo_index, 1);
         assert_eq!(now_utxos[1].slot, 49503576);
-
-        drop(wallet_db);
-
-        std::fs::remove_file("/tmp/test_insert_utxos.sqlite").unwrap();
     }
 
     #[tokio::test]
-    async fn remove_utxos() {
-        let sqlite_url = format!("sqlite:/tmp/test_remove_utxos.sqlite?mode=rwc");
+    async fn remove_utxos() -> miette::Result<()> {
+        let sqlite_url = format!("sqlite::memory:?mode=rwc");
         let db = Database::connect(&sqlite_url).await.unwrap();
 
         let wallet_db = WalletDB {
@@ -469,45 +446,26 @@ mod tests {
 
         wallet_db.migrate_up().await.unwrap();
 
-        let init_utxos = wallet_db
-            .paginate_utxos(Order::Asc, None)
-            .fetch()
+        let utxos = test_utxos();
+        wallet_db.insert_utxos(&utxos).await.into_diagnostic()?;
+        let now_utxos = wallet_db
+            .fetch_all_utxos(Order::Asc)
             .await
-            .unwrap();
+            .into_diagnostic()?;
+        assert_eq!(
+            utxos.len(),
+            now_utxos.len(),
+            "All inserted UTxOs should be fetched by the DB"
+        );
 
-        let mut to_remove = vec![];
-
-        for utxo in init_utxos {
-            let tx_hash: [u8; 32] = utxo.tx_hash.try_into().unwrap();
-
-            let txin = TransactionInput {
-                transaction_id: tx_hash.into(),
-                index: utxo.txo_index.try_into().unwrap(),
-            };
-
-            to_remove.push(txin);
-        }
-
-        // wallet_db
-        //     .remove_utxos(
-        //         to_remove
-        //             .iter()
-        //             .map(MultiEraInput::from_alonzo_compatible)
-        //             .collect(),
-        //     )
-        //     .await
-        //     .unwrap(); // TODO: Update tests
+        wallet_db.remove_utxos(&utxos).await.unwrap();
 
         let now_utxos = wallet_db
-            .paginate_utxos(Order::Asc, None)
-            .fetch()
+            .fetch_all_utxos(Order::Asc)
             .await
-            .unwrap();
+            .into_diagnostic()?;
 
-        assert!(now_utxos.is_empty());
-
-        drop(wallet_db);
-
-        std::fs::remove_file("/tmp/test_remove_utxos.sqlite").unwrap();
+        assert!(now_utxos.is_empty(), "All UTxOs should be removed");
+        Ok(())
     }
 }

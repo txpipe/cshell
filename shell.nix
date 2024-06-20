@@ -1,1 +1,0 @@
-(builtins.getFlake "/home/dmayhew/programming/cardano/txpipe/cshell/").devShells.x86_64-linux.default
