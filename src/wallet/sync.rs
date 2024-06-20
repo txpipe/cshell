@@ -53,7 +53,10 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     let start = match (args.from_slot, args.from_hash) {
         (Some(slot), Some(hash)) => Some(BlockRef {
             index: slot,
-            hash: hex::decode(&hash).into_diagnostic()?.into(),
+            hash: hex::decode(&hash)
+                .into_diagnostic()
+                .context(format!("Decoding supllied hash \"{}\"", hash))?
+                .into(),
         }),
         _ => find_intersect(utxo_cfg.clone(), &wallet_db).await?,
     };
@@ -214,7 +217,7 @@ async fn get_history_page(
     page_size: u32,
 ) -> miette::Result<HistoryPage<Cardano>> {
     let start_slot = start.as_ref().map_or(0, |b| b.index);
-    trace!("Getting history dump starting from {}.", start_slot);
+    trace!("Getting history dump starting from slot {}.", start_slot);
 
     let page = utxorpc::dump::dump_history_page(client, start, page_size)
         .await
@@ -232,7 +235,11 @@ async fn get_history_page(
         |b| b.index.to_string(),
     );
 
-    trace!("Received history dump from {} to {}.", start_slot, end_slot);
+    trace!(
+        "Received history dump from slot {} to slot {}.",
+        start_slot,
+        end_slot
+    );
 
     Ok(page)
 }
@@ -310,7 +317,7 @@ async fn collect_data_from_page(
     history_items: &Vec<Block>,
 ) -> ChainProcessingData {
     trace!(
-        "Extracting data from page of {} blocks starting from {}",
+        "Extracting data from page of {} blocks starting from slot {}",
         history_items.len(),
         history_items
             .first()
