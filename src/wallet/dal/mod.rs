@@ -288,11 +288,11 @@ impl WalletDB {
     /// slot
     pub async fn rollback_to_slot(&self, slot: u64) -> Result<(), DbErr> {
         let txn = self.conn.begin().await?;
-
+        
         // UTxOs
 
         let point_models = RecentPoints::find()
-            .filter(Condition::all().add(recent_points::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(recent_points::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
@@ -303,7 +303,7 @@ impl WalletDB {
         // Transaction History
 
         let tx_models = TxHistory::find()
-            .filter(Condition::all().add(tx_history::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(tx_history::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
@@ -314,7 +314,7 @@ impl WalletDB {
         // Recent Points
 
         let points_models = RecentPoints::find()
-            .filter(Condition::all().add(recent_points::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(recent_points::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
@@ -325,13 +325,15 @@ impl WalletDB {
         // Protocol Parameters
 
         let pparams_models = ProtocolParameters::find()
-            .filter(Condition::all().add(protocol_parameters::Column::Slot.gt(slot)))
+            .filter(Condition::all().add(protocol_parameters::Column::Slot.gte(slot)))
             .all(&txn)
             .await?;
 
         for pparams_model in pparams_models {
             let _ = pparams_model.delete(&txn).await?;
         }
+
+        txn.commit().await?;
 
         Ok(())
     }
