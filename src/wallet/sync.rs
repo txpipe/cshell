@@ -533,7 +533,6 @@ fn collect_txo_info(
         };
 
         if utxo_addr == *wallet_address {
-            // TODO: Use payment part or full address?
             let info = TxoInfo {
                 tx_hash: tx.hash.clone(),
                 txo_index: txo_idx as u32,

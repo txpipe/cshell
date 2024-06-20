@@ -124,7 +124,7 @@ fn os_str_to_report(os_str: OsString) -> miette::Report {
     miette::Report::msg(format!("Could not convert OsStr to String: {os_str:?}"))
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ConfigName {
     pub raw: String,
 }
@@ -294,5 +294,148 @@ pub fn parse_key_value(s: &str) -> Result<(String, String), String> {
         )
     } else {
         Ok((parts[0].to_owned(), parts[1].to_owned()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+    use tempfile::TempDir;
+
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
+    struct TestConfig {
+        name: ConfigName,
+        data: String,
+    }
+    impl Config for TestConfig {
+        fn name(&self) -> &ConfigName {
+            &self.name
+        }
+
+        fn config_type() -> &'static str {
+            "TestConfig"
+        }
+
+        fn parent_dir_name() -> &'static str {
+            "test_config"
+        }
+
+        fn toml_file_name() -> &'static str {
+            "test_config.toml"
+        }
+    }
+
+    fn rand_slugable_string() -> miette::Result<String> {
+        let mut chars: [char; 32] = ['a'; 32];
+        // Fill
+        for i in 0..(chars.len()) {
+            loop {
+                let ch = rand::random::<char>();
+                if (ch > 'a' && ch < 'z') || ch > '0' && ch < '9' || ch == '-' {
+                    chars[i] = ch;
+                    break;
+                }
+            }
+        }
+
+        Ok(String::from_iter(chars.iter()))
+    }
+
+    fn rand_cfg() -> miette::Result<TestConfig> {
+        Ok(TestConfig {
+            name: ConfigName::new(rand_slugable_string()?)?,
+            data: rand_slugable_string()?,
+        })
+    }
+
+    fn temp_dirs() -> miette::Result<Dirs> {
+        let temp_dir = TempDir::new().into_diagnostic()?.as_ref().to_path_buf();
+        let dirs = Dirs::try_new(Some(&temp_dir))?;
+        Ok(dirs)
+    }
+
+    #[tokio::test]
+    async fn test_save_and_load() -> miette::Result<()> {
+        let dirs = temp_dirs()?;
+        let cfg = rand_cfg()?;
+        cfg.save(&dirs, true).await?;
+        let loaded_cfg = TestConfig::load(&dirs, &cfg.name).await?;
+
+        assert_eq!(
+            Some(cfg),
+            loaded_cfg,
+            "Original config equals saved & loaded config"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_find_match() -> miette::Result<()> {
+        fn random_idx(s: &str) -> usize {
+            let mut i: usize = rand::random::<usize>() % s.len();
+            loop {
+                if s.is_char_boundary(i) {
+                    return i;
+                } else {
+                    i = (i + 1) % s.len();
+                }
+            }
+        }
+
+        fn make_equivalent(mut name: String) -> (String, String) {
+            let non_normal_chars = [' ', '_', '/'];
+            for ch_idx in 0..3 {
+                name.insert(random_idx(&name), non_normal_chars[ch_idx]);
+            }
+
+            (name.clone(), ConfigName::new(name).unwrap().normalized())
+        }
+
+        let dirs = temp_dirs()?;
+        let (name, equivalent) = make_equivalent(rand_slugable_string()?);
+        let cfg = TestConfig {
+            name: ConfigName::new(name.clone())?,
+            data: name.clone(),
+        };
+        cfg.save(&dirs, true).await?;
+
+        assert_eq!(
+            Some(cfg.name.clone()),
+            TestConfig::find_match(&dirs, &cfg.name).await?,
+            "Config name should match its own name"
+        );
+
+        assert_eq!(
+            Some(cfg.name.clone()),
+            TestConfig::find_match(&dirs, &ConfigName::new(equivalent)?).await?,
+            "Config name should match names that normalize (i.e., slugify) to the same value"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_existing() -> miette::Result<()> {
+        let dirs = temp_dirs()?;
+        let cfgs = (0..5)
+            .map(|_| rand_cfg())
+            .collect::<miette::Result<Vec<_>>>()?;
+        for cfg in cfgs.iter() {
+            cfg.save(&dirs, true).await?;
+        }
+
+        let actual: HashSet<_> = TestConfig::get_all_existing(&dirs)
+            .await?
+            .into_iter()
+            .collect();
+        let expected: HashSet<_> = cfgs.into_iter().collect();
+
+        assert_eq!(
+            expected, actual,
+            "Config::get_all_existing should find all saved configs"
+        );
+        Ok(())
     }
 }
