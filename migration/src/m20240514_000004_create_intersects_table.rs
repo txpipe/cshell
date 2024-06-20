@@ -12,13 +12,11 @@ impl MigrationTrait for Migration {
                     .table(RecentPoints::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(RecentPoints::Id)
-                            .unsigned()
+                        ColumnDef::new(RecentPoints::Slot)
+                            .big_unsigned()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(RecentPoints::Slot).big_unsigned().not_null())
                     .col(
                         ColumnDef::new(RecentPoints::BlockHash)
                             .binary_len(32)
@@ -39,7 +37,6 @@ impl MigrationTrait for Migration {
 #[derive(DeriveIden)]
 enum RecentPoints {
     Table,
-    Id, // TODO: Remove and use slot as PK?
     Slot,
     BlockHash,
 }

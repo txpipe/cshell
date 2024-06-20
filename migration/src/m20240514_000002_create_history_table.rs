@@ -12,16 +12,15 @@ impl MigrationTrait for Migration {
                     .table(TxHistory::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(TxHistory::Id)
-                            .unsigned()
+                        ColumnDef::new(TxHistory::TxHash)
+                            .binary_len(32)
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(TxHistory::TxHash).binary_len(32).not_null())
-                    .col(ColumnDef::new(TxHistory::Slot).big_unsigned().not_null())
-                    .col(ColumnDef::new(TxHistory::BlockIndex).unsigned().not_null())
-                    .col(ColumnDef::new(TxHistory::BalanceDelta).binary().not_null())
+                    .col(ColumnDef::new(TxHistory::TxIndex).unsigned().not_null())
+                    .col(ColumnDef::new(TxHistory::CoinDelta).binary().not_null())
+                    .col(ColumnDef::new(TxHistory::Slot).binary().not_null())
+                    .col(ColumnDef::new(TxHistory::BlockHash).binary().not_null())
                     .to_owned(),
             )
             .await
@@ -37,9 +36,9 @@ impl MigrationTrait for Migration {
 #[derive(DeriveIden)]
 enum TxHistory {
     Table,
-    Id, // TODO: Remove and use TxHash as PK?
     TxHash,
+    TxIndex,
+    CoinDelta,
     Slot,
-    BlockIndex,
-    BalanceDelta,
+    BlockHash,
 }

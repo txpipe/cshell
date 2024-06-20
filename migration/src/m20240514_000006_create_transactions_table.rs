@@ -20,7 +20,12 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Transaction::TxJson).binary().not_null())
                     .col(ColumnDef::new(Transaction::TxCbor).binary())
-                    .col(ColumnDef::new(Transaction::Status).string().not_null())
+                    .col(
+                        ColumnDef::new(Transaction::Status)
+                            .enumeration(Transaction::Status, STATE_VARIANTS)
+                            .string()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Transaction::Slot).big_unsigned())
                     .col(ColumnDef::new(Transaction::Hash).string())
                     .col(ColumnDef::new(Transaction::Annotation).string())
@@ -47,3 +52,20 @@ enum Transaction {
     Hash,
     Annotation,
 }
+
+#[derive(DeriveIden)]
+pub enum State {
+    Staging,
+    Built,
+    Signed,
+    Submitted,
+    Minted,
+}
+
+const STATE_VARIANTS: [State; 5] = [
+    State::Staging,
+    State::Built,
+    State::Signed,
+    State::Submitted,
+    State::Minted,
+];

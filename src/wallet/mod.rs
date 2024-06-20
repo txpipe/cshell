@@ -1,13 +1,15 @@
 use clap::{Parser, Subcommand};
 use tracing::instrument;
 
+mod balance;
 pub mod config;
 mod create;
 mod dal;
 mod delete;
+mod history;
 mod info;
 mod list;
-mod update;
+mod sync;
 
 #[derive(Parser)]
 pub struct Args {
@@ -24,17 +26,13 @@ enum Commands {
     /// List available wallets
     List,
     /// Update wallet state from the chain
-    Update(update::Args),
+    Sync(sync::Args),
     /// Delete a wallet. Caution!! This cannot be undone.
     Delete(delete::Args),
-    // /// show wallet history
-    // History(history::Args),
-    // /// list current utxos of a wallet
-    // Utxos(utxos::Args),
-    // /// select current utxos of a wallet
-    // Select(select::Args),
-    // /// show wallet balance
-    // Balance(balance::Args),
+    /// Show info about wallet history
+    History(history::Args),
+    /// show wallet balance
+    Balance(balance::Args),
 }
 
 #[instrument("wallet", skip_all)]
@@ -44,14 +42,12 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         Commands::Info(args) => info::run(args, ctx).await,
         // Commands::Address(args) => address::run(args, ctx).await,
         Commands::List => list::run(ctx).await,
-        Commands::Update(args) => {
-            crate::with_tracing();
-            update::run(args, ctx).await
+        Commands::Sync(args) => {
+            ctx.with_tracing();
+            sync::run(args, ctx).await
         }
         Commands::Delete(args) => delete::run(args, ctx).await,
-        // Commands::History(args) => history::run(args).await,
-        // Commands::Utxos(args) => utxos::run(args, ctx).await,
-        // Commands::Select(args) => select::run(args, ctx).await,
-        // Commands::Balance(args) => balance::run(args, ctx).await,
+        Commands::History(args) => history::run(args, ctx).await,
+        Commands::Balance(args) => balance::run(args, ctx).await,
     }
 }

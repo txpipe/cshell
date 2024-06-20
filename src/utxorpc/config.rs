@@ -6,10 +6,12 @@ use comfy_table::Table;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Utxorpc {
     pub version: String,
     pub name: ConfigName,
+    pub network: String,
+    pub is_testnet: bool,
     pub url: Url,
     pub headers: Vec<(String, String)>,
 
@@ -17,11 +19,19 @@ pub struct Utxorpc {
     pub last_updated: DateTime<Local>,
 }
 impl Utxorpc {
-    pub fn new(name: String, url: Url, headers: Vec<(String, String)>) -> miette::Result<Self> {
+    pub fn new(
+        name: String,
+        url: Url,
+        network: String,
+        is_test_net: bool,
+        headers: Vec<(String, String)>,
+    ) -> miette::Result<Self> {
         let now = Local::now();
         Ok(Self {
             version: crate::utils::VERSION.to_owned(),
             name: ConfigName::new(name)?,
+            network,
+            is_testnet: is_test_net,
             url,
             headers,
             created_on: now,
@@ -29,13 +39,21 @@ impl Utxorpc {
         })
     }
 
-    pub fn update(&mut self, url: Option<Url>, headers: Option<Vec<(String, String)>>) {
+    pub fn update(
+        &mut self,
+        url: Option<Url>,
+        headers: Option<Vec<(String, String)>>,
+        is_testnet: Option<bool>,
+    ) {
         if let Some(url) = url {
             self.url = url;
         }
         if let Some(headers) = headers {
             self.headers = headers;
         }
+        if let Some(is_testnet) = is_testnet {
+            self.is_testnet = is_testnet
+        };
         self.last_updated = Local::now();
     }
 }
@@ -43,6 +61,10 @@ impl Utxorpc {
 impl crate::utils::Config for Utxorpc {
     fn name(&self) -> &ConfigName {
         &self.name
+    }
+
+    fn config_type() -> &'static str {
+        "Utxorpc"
     }
 
     fn parent_dir_name() -> &'static str {
@@ -65,6 +87,8 @@ impl OutputFormatter for Utxorpc {
         for (header, value) in &self.headers {
             table.add_row(vec!["Header", header, value]);
         }
+        table.add_row(vec!["Network", &self.network]);
+        table.add_row(vec!["Is testnet", &self.is_testnet.to_string()]);
         table.add_row(vec![
             "Created on",
             &utils::pretty_print_date(&self.created_on),

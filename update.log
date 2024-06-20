@@ -1,0 +1,170 @@
+   Compiling migration v0.1.0 (/home/dmayhew/programming/cardano/txpipe/cshell/migration)
+   Compiling entity v0.1.0 (/home/dmayhew/programming/cardano/txpipe/cshell/entity)
+   Compiling cshell v0.1.0 (/home/dmayhew/programming/cardano/txpipe/cshell)
+warning: unused import: `tracing::Level`
+ --> src/main.rs:3:5
+  |
+3 | use tracing::Level;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `BlockBody`
+ --> src/chain/get_block.rs:5:26
+  |
+5 |         cardano::{Block, BlockBody},
+  |                          ^^^^^^^^^
+
+warning: unused import: `tracing::error`
+  --> src/utils.rs:13:5
+   |
+13 | use tracing::error;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `TxOutput`
+  --> src/utils.rs:14:61
+   |
+14 | use utxorpc::spec::cardano::{Block, BlockBody, BlockHeader, TxOutput};
+   |                                                             ^^^^^^^^
+
+warning: unused import: `futures::Future`
+ --> src/wallet/config.rs:8:5
+  |
+8 | use futures::Future;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused imports: `Context`, `IntoDiagnostic`
+ --> src/wallet/config.rs:9:14
+  |
+9 | use miette::{Context, IntoDiagnostic};
+  |              ^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused imports: `Era`, `MultiEraOutput`, `addresses::ShelleyAddress`
+  --> src/wallet/config.rs:11:5
+   |
+11 |     addresses::ShelleyAddress,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+12 |     traverse::{Era, MultiEraOutput},
+   |                ^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `join_all`
+ --> src/wallet/dal/mod.rs:2:23
+  |
+2 | use futures::future::{join_all, try_join_all};
+  |                       ^^^^^^^^
+
+warning: unused import: `std::num`
+ --> src/wallet/dal/mod.rs:8:5
+  |
+8 | use std::num;
+  |     ^^^^^^^^
+
+warning: unreachable statement
+  --> src/wallet/update.rs:90:5
+   |
+89 |     unimplemented!("Whoops!");
+   |     ------------------------- any code following this expression is unreachable
+90 |     let live_tip = chain::follow_tip::follow_tip(utxo_cfg, vec![]);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+   |
+   = note: `#[warn(unreachable_code)]` on by default
+
+warning: unused variable: `utxo_cfg`
+  --> src/wallet/update.rs:75:5
+   |
+75 |     utxo_cfg: Utxorpc,
+   |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_utxo_cfg`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `wallet`
+  --> src/wallet/update.rs:77:5
+   |
+77 |     wallet: &Wallet,
+   |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_wallet`
+
+warning: unused variable: `live_tip`
+  --> src/wallet/update.rs:90:9
+   |
+90 |     let live_tip = chain::follow_tip::follow_tip(utxo_cfg, vec![]);
+   |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_live_tip`
+
+warning: unused variable: `utxo_cfg`
+   --> src/wallet/update.rs:226:5
+    |
+226 |     utxo_cfg: &Utxorpc,
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_utxo_cfg`
+
+warning: unused variable: `wallet_address`
+   --> src/wallet/update.rs:422:5
+    |
+422 |     wallet_address: &ShelleyAddress,
+    |     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wallet_address`
+
+warning: method `update` is never used
+  --> src/wallet/config.rs:61:12
+   |
+42 | impl Wallet {
+   | ----------- method in this implementation
+...
+61 |     pub fn update(
+   |            ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: associated function `new` is never used
+   --> src/wallet/config.rs:236:12
+    |
+235 | impl BalanceView {
+    | ---------------- associated function in this implementation
+236 |     pub fn new(lovelace: u64, tokens: Vec<(String, u64)>) -> Self {
+    |            ^^^
+
+warning: multiple methods are never used
+   --> src/wallet/dal/mod.rs:116:12
+    |
+28  | impl WalletDB {
+    | ------------- methods in this implementation
+...
+116 |     pub fn paginate_utxos(
+    |            ^^^^^^^^^^^^^^
+...
+139 |     pub async fn fetch_all_utxos(&self, order: Order) -> Result<Vec<utxo::Model>, DbErr> {
+    |                  ^^^^^^^^^^^^^^^
+...
+161 |     pub fn paginate_tx_history(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+232 |     pub async fn remove_recent_points_before_slot(&self, slot: u64) -> Result<(), DbErr> {
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+249 |     pub async fn insert_protocol_parameters(
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+270 |     pub async fn fetch_latest_protocol_parameters(&self) -> Result<Option<Vec<u8>>, DbErr> {
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+284 |     pub async fn rollback_to_slot(&self, slot: u64) -> Result<(), DbErr> {
+    |                  ^^^^^^^^^^^^^^^^
+...
+336 |     pub async fn insert_transaction(&self, tx_json: Vec<u8>) -> Result<i32, DbErr> {
+    |                  ^^^^^^^^^^^^^^^^^^
+...
+350 |     pub fn paginate_transactions(
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+360 |     pub async fn fetch_by_id(&self, id: &i32) -> Result<Option<transaction::Model>, DbErr> {
+    |                  ^^^^^^^^^^^
+...
+364 |     pub async fn remove_transaction(&self, id: &i32) -> Result<(), DbErr> {
+    |                  ^^^^^^^^^^^^^^^^^^
+...
+369 |     pub async fn update_transaction(&self, model: transaction::Model) -> Result<(), DbErr> {
+    |                  ^^^^^^^^^^^^^^^^^^
+
+warning: function `big_int_from_db_vec` is never used
+   --> src/wallet/dal/types.rs:132:8
+    |
+132 | pub fn big_int_from_db_vec(db_vec: &Vec<u8>) -> BigInt {
+    |        ^^^^^^^^^^^^^^^^^^^
+

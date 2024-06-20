@@ -19,12 +19,10 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Utxo::TxHash).binary_len(32).not_null())
-                    .col(ColumnDef::new(Utxo::TxoIndex).unsigned().not_null())
-                    .col(ColumnDef::new(Utxo::PaymentCred).binary_len(28).not_null())
-                    .col(ColumnDef::new(Utxo::FullAddress).binary().not_null())
+                    .col(ColumnDef::new(Utxo::TxoIndex).big_unsigned().not_null())
+                    .col(ColumnDef::new(Utxo::Address).binary().not_null())
                     .col(ColumnDef::new(Utxo::Slot).big_unsigned().not_null())
-                    .col(ColumnDef::new(Utxo::Era).small_unsigned().not_null())
-                    .col(ColumnDef::new(Utxo::Cbor).binary().not_null())
+                    .col(ColumnDef::new(Utxo::Coin).binary_len(8).not_null())
                     .to_owned(),
             )
             .await
@@ -43,9 +41,7 @@ enum Utxo {
     Id,
     TxHash,
     TxoIndex,
-    PaymentCred,
-    FullAddress, // TODO: Reflect in ADR, easier than having field which can support all different staking cred
+    Address,
     Slot,
-    Era,
-    Cbor,
+    Coin,
 }
