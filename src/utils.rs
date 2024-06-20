@@ -4,12 +4,11 @@ use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
 use comfy_table::Table;
+use futures::future::join_all;
 use miette::{bail, Context, IntoDiagnostic};
 use pallas::ledger::addresses::Address;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio_stream::wrappers::ReadDirStream;
-use tokio_stream::StreamExt;
 use utxorpc::spec::cardano::{Block, BlockBody, BlockHeader};
 use utxorpc::spec::sync::BlockRef;
 
@@ -59,24 +58,22 @@ pub trait Config: Sized + DeserializeOwned + Serialize {
             return Ok(vec![]);
         }
 
-        let read_dir = tokio::fs::read_dir(parent_dir_path)
-            .await
-            .into_diagnostic()?;
-        let read_dir = ReadDirStream::new(read_dir);
-        let cfgs: Vec<Self> = read_dir
-            .then(|dir| async move {
-                let name = dir
+        let cfg_futs = std::fs::read_dir(parent_dir_path)
+            .into_diagnostic()?
+            .map(|dir_entry| async {
+                let name = dir_entry
                     .into_diagnostic()?
                     .file_name()
                     .into_string()
                     .map_err(os_str_to_report)?;
                 Ok(Self::load(dirs, &ConfigName { raw: name }).await?.unwrap())
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        join_all(cfg_futs)
             .await
             .into_iter()
-            .collect::<miette::Result<Vec<_>>>()?;
-        Ok(cfgs)
+            .collect::<miette::Result<Vec<_>>>()
     }
 
     // Result represents if there was an error reading the config
