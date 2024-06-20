@@ -123,8 +123,8 @@ pub struct EditArgs {
     /// Headers to pass to the UTxO RPC endpoint
     #[arg(short('H'), long, value_parser = crate::utils::parse_key_value, value_name = "KEY:VALUE")]
     headers: Option<Vec<(String, String)>>,
-    /// Include this option to append ot the existing headers
-    #[arg(short, long)]
+    /// Include this option to append the new headers to the existing headers
+    #[arg(short, long, requires = "headers")]
     append: bool,
     /// If the network is a testnet (default: false)
     #[arg(short, long)]
