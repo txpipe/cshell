@@ -98,7 +98,6 @@ async fn get_cfg_and_db(
     Ok((utxo_cfg?, wallet_db.into_diagnostic()?))
 }
 
-// This has not been tested yet due to issues with the Demeter u5c port
 #[instrument(skip_all)]
 async fn find_intersect(
     utxo_cfg: Utxorpc,
@@ -221,10 +220,17 @@ async fn get_history_page(
         .await
         .context("Getting history page")?;
 
-    let end_slot = page
-        .next
-        .as_ref()
-        .map_or(String::from("End"), |b| b.index.to_string());
+    let end_slot = page.next.as_ref().map_or(
+        {
+            let last_slot = page
+                .items
+                .last()
+                .map(|b| b.header.as_ref().map(|h| h.slot))
+                .flatten();
+            last_slot.map_or(String::from("End"), |slot| format!("{} (Tip)", slot))
+        },
+        |b| b.index.to_string(),
+    );
 
     trace!("Received history dump from {} to {}.", start_slot, end_slot);
 
@@ -435,7 +441,7 @@ async fn get_used_inputs_as_txo_infos(wallet_db: &WalletDB, tx: &Tx, slot: u64) 
                 .as_ref()
                 .map(|output| TxoInfo::from_tx_input_output(output, input, slot));
 
-            // TODO: as_output seems to be broken so try to fetch the TxOutput info for this input from the DB
+            // For resiliency, try to fetch the TxOutput info for this input from the DB
             let resolved_from_db = match resolved_from_as_output {
                 Some(resolved) => Some(resolved),
                 None => {

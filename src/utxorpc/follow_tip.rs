@@ -104,7 +104,6 @@ async fn print_current_tip(
     Ok(())
 }
 
-// This has not been tested as there is an issue with the u5c port on Demeter!
 pub async fn get_current_tip(
     utxo_cfg: Utxorpc,
     intersect_refs: Vec<BlockRef>,
