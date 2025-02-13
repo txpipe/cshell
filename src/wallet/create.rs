@@ -1,22 +1,10 @@
 use clap::Parser;
 use miette::{bail, IntoDiagnostic};
-use pallas::{
-    crypto::key::ed25519::SecretKey,
-    ledger::{
-        addresses::{Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart},
-        traverse::ComputeHash,
-    },
-    wallet::wrapper,
-};
-use rand::rngs::OsRng;
-use tracing::{info, instrument};
+use tracing::instrument;
 
-use crate::{
-    utils::{Config, ConfigName, OutputFormatter},
-    wallet,
-};
+use crate::{output::OutputFormatter, utils::Name};
 
-use crate::wallet::config::Wallet;
+use super::types::Wallet;
 
 #[derive(Parser, Clone)]
 pub struct Args {
@@ -27,79 +15,22 @@ pub struct Args {
     /// spending password used to encrypt the private keys
     /// (leave blank to enter in interactive mode)
     password: Option<String>,
-
-    /// name of the chain to attach the wallet
-    #[arg(env = "CSHELL_DEFAULT_UTXORPC_CONFIG")]
-    pub utxorpc_config: Option<String>,
-}
-
-struct UserSelections {
-    name: ConfigName,
-    password: String,
-    utxorpc_config: String,
 }
 
 #[instrument("create", skip_all)]
-pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
-    let selections = gather_inputs(args, ctx).await?;
-
-    // Make keys
-    let priv_key = SecretKey::new(OsRng);
-    let pkh = priv_key.public_key().compute_hash();
-    let encrypted_priv_key =
-        wrapper::encrypt_private_key(OsRng, priv_key.into(), &selections.password);
-    let key_data = wallet::config::Keys {
-        public_key_hash: hex::encode(pkh),
-        private_encrypted: hex::encode(encrypted_priv_key),
-    };
-
-    let mainnet_address = ShelleyAddress::new(
-        Network::Mainnet,
-        ShelleyPaymentPart::key_hash(pkh.into()),
-        ShelleyDelegationPart::Null,
-    );
-
-    let testnet_address = ShelleyAddress::new(
-        Network::Testnet,
-        ShelleyPaymentPart::key_hash(pkh.into()),
-        ShelleyDelegationPart::Null,
-    );
-
-    let addresses = wallet::config::Addresses {
-        mainnet: mainnet_address.to_bech32().into_diagnostic()?,
-        testnet: testnet_address.to_bech32().into_diagnostic()?,
-    };
-
-    // Save wallet config
-    let wallet = wallet::config::Wallet::new(
-        selections.name,
-        key_data,
-        addresses,
-        ConfigName::new(selections.utxorpc_config)?,
-    )?;
-    wallet.save(&ctx.dirs, false).await?;
-
-    // Log, print, and finish
-    info!(wallet = wallet.name().raw, "created");
-    println!("Wallet created:");
-    wallet.output(&ctx.output_format);
-    Ok(())
-}
-
-async fn gather_inputs(args: Args, ctx: &crate::Context) -> miette::Result<UserSelections> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     let raw_name = match args.name {
         Some(name) => name,
         None => inquire::Text::new("Name of the wallet:")
             .prompt()
             .into_diagnostic()?,
     };
-    let name = ConfigName::new(raw_name)?;
+    let name = Name::try_from(raw_name)?;
 
-    if let Some(conflict) = Wallet::find_match(&ctx.dirs, &name).await? {
+    if ctx.store.wallets().iter().any(|wallet| wallet.name == name) {
         bail!(
-            r#"Wallet with the same or conflicting name "{}" already exists. Both normalize to "{}"."#,
-            &conflict.raw,
-            &name.normalized()
+            "Wallet with the same or conflicting name '{}' already exists.",
+            name
         )
     }
 
@@ -112,19 +43,12 @@ async fn gather_inputs(args: Args, ctx: &crate::Context) -> miette::Result<UserS
             .into_diagnostic()?,
     };
 
-    let utxorpc_config = match args.utxorpc_config {
-        Some(cfg) => cfg,
-        None => inquire::Text::new(
-            "Name of the UTxO RPC Config to use with this wallet. \
-            Note that this determines the chain this wallet will use.",
-        )
-        .prompt()
-        .into_diagnostic()?,
-    };
+    let wallet = Wallet::try_from(&name, &password, ctx.store.default_wallet().is_none())?;
 
-    Ok(UserSelections {
-        name,
-        password,
-        utxorpc_config,
-    })
+    ctx.store.add_wallet(&wallet)?;
+
+    // Log, print, and finish
+    println!("Wallet created.");
+    wallet.output(&ctx.output_format);
+    Ok(())
 }

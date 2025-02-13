@@ -2,7 +2,7 @@ use clap::Parser;
 
 #[derive(Parser)]
 pub struct Args {
-    /// Name of the wallet to show the balance of. If undefined, will use default
+    /// Name of the provider to edit
     name: String,
 }
 

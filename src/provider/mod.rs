@@ -1,13 +1,14 @@
 use clap::{Parser, Subcommand};
 use tracing::instrument;
 
-mod balance;
 mod create;
 mod delete;
 mod edit;
 mod info;
 mod list;
+mod test;
 pub mod types;
+pub mod utxorpc;
 
 #[derive(Parser)]
 pub struct Args {
@@ -27,8 +28,8 @@ enum Commands {
     List,
     /// Delete a wallet. Caution!! This cannot be undone.
     Delete(delete::Args),
-    /// show wallet balance
-    Balance(balance::Args),
+    /// Try connection.
+    Test(test::Args),
 }
 
 #[instrument("wallet", skip_all)]
@@ -41,6 +42,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         Commands::Info(args) => info::run(args, ctx).await,
         Commands::List => list::run(ctx).await,
         Commands::Delete(args) => delete::run(args, ctx).await,
-        Commands::Balance(args) => balance::run(args, ctx).await,
+        Commands::Test(args) => test::run(args, ctx).await,
     }
 }
