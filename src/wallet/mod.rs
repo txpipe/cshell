@@ -7,6 +7,7 @@ mod delete;
 mod edit;
 mod info;
 mod list;
+mod restore;
 pub mod types;
 
 #[derive(Parser)]
@@ -19,6 +20,8 @@ pub struct Args {
 enum Commands {
     /// Create a new wallet. Leave arguments blank for interactive mode
     Create(create::Args),
+    /// Restore wallet using BIP39 Mnemonic. Leave arguments blank for interactive mode
+    Restore(restore::Args),
     /// Edit an existing wallet
     Edit(edit::Args),
     /// Show wallet info
@@ -37,6 +40,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
 
     match args.command {
         Commands::Create(args) => create::run(args, ctx).await,
+        Commands::Restore(args) => restore::run(args, ctx).await,
         Commands::Edit(args) => edit::run(args, ctx).await,
         Commands::Info(args) => info::run(args, ctx).await,
         Commands::List => list::run(ctx).await,

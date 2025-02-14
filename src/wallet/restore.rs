@@ -15,9 +15,13 @@ pub struct Args {
     /// spending password used to encrypt the private keys
     /// (leave blank to enter in interactive mode)
     password: Option<String>,
+
+    /// BIP39 Mnemonic.
+    /// (leave blank to enter in interactive mode)
+    mnemonic: Option<String>,
 }
 
-#[instrument("create", skip_all)]
+#[instrument("restore", skip_all)]
 pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     let raw_name = match args.name {
         Some(name) => name,
@@ -43,19 +47,23 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             .into_diagnostic()?,
     };
 
-    let (wallet, mnemonic) =
-        Wallet::try_from(&name, &password, ctx.store.default_wallet().is_none())?;
-
-    println!("Your mnemonic phrase is the following:");
-    println!("\n");
-    println!("{}", mnemonic);
-    println!("\n");
-    println!("Save this phrase somewhere safe to restore your wallet if it ever gets lost.");
+    let mnemonic = match args.mnemonic {
+        Some(name) => name,
+        None => inquire::Text::new("BIP39 mnemonic:")
+            .prompt()
+            .into_diagnostic()?,
+    };
+    let wallet = Wallet::try_from_mnemonic(
+        &name,
+        &password,
+        &mnemonic,
+        ctx.store.default_wallet().is_none(),
+    )?;
 
     ctx.store.add_wallet(&wallet)?;
 
     // Log, print, and finish
-    println!("Wallet created.");
+    println!("Wallet imported.");
     wallet.output(&ctx.output_format);
     Ok(())
 }
