@@ -3,20 +3,20 @@ use tracing::{info, instrument};
 
 #[derive(Parser)]
 pub struct Args {
-    /// Name of the wallet to delete
+    /// Name of the provider to delete
     name: String,
 }
 
 #[instrument("delete", skip_all)]
 pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
-    let wallet = ctx.store.find_wallet(&args.name);
-    match wallet {
-        Some(wallet) => {
-            info!("Removing wallet...");
-            ctx.store.remove_wallet(wallet.clone())
+    let provider = ctx.store.find_provider(&args.name);
+    match provider {
+        Some(provider) => {
+            info!("Removing provider...");
+            ctx.store.remove_provider(provider.clone())
         }
         None => {
-            info!("Wallet not found.");
+            info!("Provider not found.");
             Ok(())
         }
     }
