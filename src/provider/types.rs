@@ -1,9 +1,11 @@
-use crate::output::OutputFormatter;
 use comfy_table::Table;
+use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::output::OutputFormatter;
 use crate::provider::utxorpc::UTxORPCProvider;
+use crate::types::{Balance, DetailedBalance};
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(tag = "type")]
@@ -45,6 +47,18 @@ impl Provider {
     pub async fn test(&self) -> miette::Result<()> {
         match self {
             Provider::UTxORPC(provider) => provider.test().await,
+        }
+    }
+
+    pub async fn get_balance(&self, address: &Address) -> miette::Result<Balance> {
+        match self {
+            Provider::UTxORPC(provider) => provider.get_balance(address).await,
+        }
+    }
+
+    pub async fn get_detailed_balance(&self, address: &Address) -> miette::Result<DetailedBalance> {
+        match self {
+            Provider::UTxORPC(provider) => provider.get_detailed_balance(address).await,
         }
     }
 }

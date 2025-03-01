@@ -6,6 +6,7 @@ mod output;
 mod provider;
 mod store;
 mod transaction;
+mod types;
 mod utils;
 mod wallet;
 

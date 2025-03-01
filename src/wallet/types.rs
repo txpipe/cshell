@@ -144,13 +144,14 @@ impl OutputFormatter for &Vec<Wallet> {
     fn to_table(&self) {
         let mut table = Table::new();
 
-        table.set_header(vec!["Name", "Created", "Modified"]);
+        table.set_header(vec!["Name", "Created", "Modified", "Is Default?"]);
 
         for wallet in self.iter() {
             table.add_row(vec![
                 wallet.name.to_string(),
                 utils::pretty_print_date(&wallet.created),
                 utils::pretty_print_date(&wallet.modified),
+                wallet.is_default.to_string(),
             ]);
         }
 
