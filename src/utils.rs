@@ -43,6 +43,14 @@ impl std::fmt::Display for Name {
     }
 }
 
+pub fn show_is_current(option: impl std::fmt::Display, is_current: bool) -> String {
+    if is_current {
+        format!("{} (current)", option)
+    } else {
+        format!("{}", option)
+    }
+}
+
 // Dates
 pub const DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S %:z";
 

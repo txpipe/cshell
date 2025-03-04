@@ -3,17 +3,12 @@ use std::{collections::HashMap, fmt::Display};
 use clap::Parser;
 use miette::{bail, IntoDiagnostic};
 
-use crate::{output::OutputFormatter, utils::Name};
+use crate::{
+    output::OutputFormatter,
+    utils::{show_is_current, Name},
+};
 
 use super::{types::Provider, utxorpc::UTxORPCProvider};
-
-fn show_is_current(option: impl Display, is_current: bool) -> String {
-    if is_current {
-        format!("{} (current)", option)
-    } else {
-        format!("{}", option)
-    }
-}
 
 #[derive(clap::ValueEnum, Clone, Copy)]
 enum ProviderKind {
