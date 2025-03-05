@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use clap::Parser;
-use miette::{bail, IntoDiagnostic};
+use miette::{bail, Context, IntoDiagnostic};
 use tracing::instrument;
 
 use crate::{output::OutputFormatter, utils::Name};
@@ -19,19 +20,33 @@ enum NetworkKind {
     Testnet,
 }
 
+#[derive(Serialize, Deserialize)]
+struct UTxORPCParameters {
+    url: String,
+    headers: HashMap<String, String>,
+}
+
 #[derive(Parser, Clone)]
 pub struct Args {
     /// Name to identify the provider.
+    #[arg(long)]
     name: Option<String>,
 
     /// Provider kind.
+    #[arg(long)]
     kind: Option<ProviderKind>,
 
     /// Whether to set as default provider.
+    #[arg(long)]
     is_default: Option<bool>,
 
     /// Whether it is mainnet or testnet.
+    #[arg(long)]
     network_kind: Option<NetworkKind>,
+
+    /// JSON encoded parameters particular to the provider type.
+    #[arg(long)]
+    parameters: Option<String>,
 }
 
 #[instrument("create", skip_all)]
@@ -83,8 +98,16 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     // Provider specific inquires.
     let provider = match kind {
         ProviderKind::Utxorpc => {
-            let url = inquire::Text::new("URL:").prompt().into_diagnostic()?;
-            let headers: HashMap<String, String> = inquire::Text::new(
+            let (url, headers) = match args.parameters {
+                Some(parameters) => {
+                    let parameters: UTxORPCParameters = serde_json::from_str(&parameters)
+                        .into_diagnostic()
+                        .context("Invalid parameters")?;
+                    (parameters.url, parameters.headers)
+                }
+                None => {
+                    let url = inquire::Text::new("URL:").prompt().into_diagnostic()?;
+                    let headers: HashMap<String, String> = inquire::Text::new(
                 "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
             )
             .prompt()
@@ -103,7 +126,9 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
                 Ok((key.to_string(), val.to_string()))
             })
             .collect::<Result<_, miette::Error>>()?;
-
+                    (url, headers)
+                }
+            };
             Provider::UTxORPC(UTxORPCProvider {
                 name,
                 is_default: Some(ctx.store.providers().is_empty()),
@@ -121,7 +146,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     ctx.store.add_provider(&provider)?;
 
     // Log, print, and finish
-    println!("Provider created.");
     provider.output(&ctx.output_format);
     Ok(())
 }

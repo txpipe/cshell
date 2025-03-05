@@ -114,6 +114,7 @@ impl Context {
 async fn main() -> miette::Result<()> {
     let cli = Cli::parse();
     let mut ctx = Context::from_cli(&cli)?;
+    ctx.with_tracing();
 
     match cli.command {
         Commands::Provider(args) => provider::run(args, &mut ctx).await?,

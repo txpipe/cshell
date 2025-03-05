@@ -38,10 +38,15 @@ pub struct Args {
     /// Name to identify the provider.
     name: Option<String>,
 
+    /// Name to identify the provider.
+    #[arg(long)]
+    new_name: Option<String>,
+
     /// Provider kind.
     kind: Option<ProviderKind>,
 
     /// Whether to set as default provider.
+    #[arg(long)]
     is_default: Option<bool>,
 
     /// Whether it is mainnet or testnet.
@@ -59,11 +64,16 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         bail!("Provider not found.")
     };
 
-    let new_name = inquire::Text::new("New name: ")
-        .with_default(&provider.name())
-        .prompt()
-        .into_diagnostic()?;
-    let new_name = Name::try_from(new_name)?;
+    let new_name = match args.new_name {
+        None => {
+            let new_name = inquire::Text::new("New name: ")
+                .with_default(&provider.name())
+                .prompt()
+                .into_diagnostic()?;
+            Name::try_from(new_name)?
+        }
+        Some(new_name) => Name::try_from(new_name)?,
+    };
 
     let new_kind = match args.kind {
         Some(kind) => kind,
@@ -181,7 +191,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     ctx.store.add_provider(&new_provider)?;
 
     // Log, print, and finish
-    println!("Provider edited.");
     new_provider.output(&ctx.output_format);
     Ok(())
 }

@@ -10,14 +10,17 @@ use super::types::Wallet;
 pub struct Args {
     /// name to identify the wallet
     /// (leave blank to enter in interactive mode)
+    #[arg(long)]
     pub name: Option<String>,
 
     /// spending password used to encrypt the private keys
     /// (leave blank to enter in interactive mode)
+    #[arg(long)]
     password: Option<String>,
 
     /// BIP39 Mnemonic.
     /// (leave blank to enter in interactive mode)
+    #[arg(long)]
     mnemonic: Option<String>,
 }
 
@@ -63,7 +66,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     ctx.store.add_wallet(&wallet)?;
 
     // Log, print, and finish
-    println!("Wallet imported.");
     wallet.output(&ctx.output_format);
     Ok(())
 }

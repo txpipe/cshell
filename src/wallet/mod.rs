@@ -36,8 +36,6 @@ enum Commands {
 
 #[instrument("wallet", skip_all)]
 pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
-    ctx.with_tracing();
-
     match args.command {
         Commands::Create(args) => create::run(args, ctx).await,
         Commands::Restore(args) => restore::run(args, ctx).await,

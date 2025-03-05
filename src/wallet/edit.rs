@@ -14,7 +14,12 @@ pub struct Args {
     /// Name of the wallet to update. If undefined will use default.
     name: Option<String>,
 
+    /// New name for wallet.
+    #[arg(long)]
+    new_name: Option<String>,
+
     /// Whether to set as default wallet.
+    #[arg(long)]
     is_default: Option<bool>,
 }
 
@@ -29,11 +34,16 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         bail!("Wallet not found.")
     };
 
-    let new_name = inquire::Text::new("New name: ")
-        .with_default(&wallet.name)
-        .prompt()
-        .into_diagnostic()?;
-    let new_name = Name::try_from(new_name)?;
+    let new_name = match args.new_name {
+        Some(new_name) => Name::try_from(new_name)?,
+        None => {
+            let new_name = inquire::Text::new("New name: ")
+                .with_default(&wallet.name)
+                .prompt()
+                .into_diagnostic()?;
+            Name::try_from(new_name)?
+        }
+    };
 
     let new_is_default = match args.is_default {
         Some(x) => x,
@@ -68,7 +78,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
     ctx.store.add_wallet(&new_wallet)?;
 
     // Log, print, and finish
-    println!("Wallet modified.");
     new_wallet.output(&ctx.output_format);
     Ok(())
 }

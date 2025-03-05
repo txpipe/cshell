@@ -7,6 +7,7 @@ use crate::output::OutputFormatter;
 #[derive(Parser)]
 pub struct Args {
     /// Name of the wallet to show info for. If undefined, will use default
+    #[arg(long)]
     name: Option<String>,
 }
 

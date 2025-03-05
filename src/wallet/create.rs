@@ -10,10 +10,12 @@ use super::types::Wallet;
 pub struct Args {
     /// name to identify the wallet
     /// (leave blank to enter in interactive mode)
+    #[arg(long)]
     pub name: Option<String>,
 
     /// spending password used to encrypt the private keys
     /// (leave blank to enter in interactive mode)
+    #[arg(long)]
     password: Option<String>,
 }
 
@@ -43,19 +45,11 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             .into_diagnostic()?,
     };
 
-    let (wallet, mnemonic) =
-        Wallet::try_from(&name, &password, ctx.store.default_wallet().is_none())?;
+    let new_wallet = Wallet::try_from(&name, &password, ctx.store.default_wallet().is_none())?;
 
-    println!("Your mnemonic phrase is the following:");
-    println!("\n");
-    println!("{}", mnemonic);
-    println!("\n");
-    println!("Save this phrase somewhere safe to restore your wallet if it ever gets lost.");
-
-    ctx.store.add_wallet(&wallet)?;
+    ctx.store.add_wallet(&new_wallet.1)?;
 
     // Log, print, and finish
-    println!("Wallet created.");
-    wallet.output(&ctx.output_format);
+    new_wallet.output(&ctx.output_format);
     Ok(())
 }

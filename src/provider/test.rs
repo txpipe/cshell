@@ -4,6 +4,7 @@ use miette::bail;
 #[derive(Parser)]
 pub struct Args {
     /// Name of the provider to test connection with. If undefined will use default.
+    #[arg(long)]
     name: Option<String>,
 }
 

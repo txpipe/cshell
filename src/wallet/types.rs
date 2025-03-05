@@ -16,6 +16,8 @@ use serde_json::{json, Value};
 
 use crate::{output::OutputFormatter, utils};
 
+pub type NewWallet = (String, Wallet);
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Wallet {
     pub name: Name,
@@ -29,11 +31,7 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub fn try_from(
-        name: &str,
-        password: &str,
-        is_default: bool,
-    ) -> miette::Result<(Self, String)> {
+    pub fn try_from(name: &str, password: &str, is_default: bool) -> miette::Result<NewWallet> {
         let (private_key, mnemonic) =
             Bip32PrivateKey::generate_with_mnemonic(OsRng, password.to_string());
         let public_key = private_key.to_public().as_bytes();
@@ -45,6 +43,7 @@ impl Wallet {
         );
 
         Ok((
+            mnemonic.to_string(),
             Self {
                 name: Name::try_from(name)?,
                 encrypted_private_key,
@@ -53,7 +52,6 @@ impl Wallet {
                 modified: Local::now(),
                 is_default,
             },
-            mnemonic.to_string(),
         ))
     }
 
@@ -179,6 +177,37 @@ impl OutputFormatter for &Vec<Wallet> {
                     })
                     .collect::<Vec<Value>>(),
             )
+            .unwrap()
+        );
+    }
+}
+
+impl OutputFormatter for NewWallet {
+    fn to_table(&self) {
+        println!("Your mnemonic phrase is the following:");
+        println!("\n");
+        println!("* {}", self.0);
+        println!("\n");
+        println!("Save this phrase somewhere safe to restore your wallet if it ever gets lost.");
+
+        self.1.to_table();
+    }
+
+    fn to_json(&self) {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "name": &self.1.name,
+                "mnemonic": &self.0,
+                "public_key": hex::encode(&self.1.public_key),
+                "addresses": {
+                    "mainnet": &self.1.address(false).to_string(),
+                    "testnet": &self.1.address(true).to_string(),
+                },
+                "created": self.1.created,
+                "modified": self.1.modified,
+                "is_default": self.1.is_default,
+            }))
             .unwrap()
         );
     }
