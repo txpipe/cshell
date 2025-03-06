@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2025-03-06
+
+### 🐛 Bug Fixes
+
+- Use ListOption instead of listing possibilities
+- Allow empty headers on provider
+
 ## [0.2.0] - 2025-03-05
 
 ### 🚀 Features
@@ -16,6 +23,7 @@ All notable changes to this project will be documented in this file.
 
 - Get balance and edit providers
 - Add wallet edit
+- Release cshell version 0.2.0
 
 ### Release
 
