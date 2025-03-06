@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use clap::Parser;
+use inquire::list_option::ListOption;
 use miette::{bail, IntoDiagnostic};
 
 use crate::{
@@ -79,17 +80,20 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         Some(kind) => kind,
         None => match inquire::Select::new(
             "Kind of provider:",
-            vec![show_is_current(
-                ProviderKind::Utxorpc,
-                ProviderKind::Utxorpc.to_string().to_lowercase() == provider.kind(),
-            )
-            .as_str()],
+            vec![ListOption::new(
+                0,
+                show_is_current(
+                    ProviderKind::Utxorpc,
+                    ProviderKind::Utxorpc.to_string().to_lowercase() == provider.kind(),
+                )
+                .as_str(),
+            )],
         )
         .prompt()
         .into_diagnostic()?
+        .index
         {
-            "utxorpc" => ProviderKind::Utxorpc,
-            "utxorpc (current)" => ProviderKind::Utxorpc,
+            0 => ProviderKind::Utxorpc,
             _ => bail!("Invalid kind."),
         },
     };
@@ -99,17 +103,16 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         None => match inquire::Select::new(
             "Set as default?",
             vec![
-                show_is_current("yes", provider.is_default()).as_str(),
-                show_is_current("no", !provider.is_default()).as_str(),
+                ListOption::new(0, show_is_current("yes", provider.is_default()).as_str()),
+                ListOption::new(1, show_is_current("no", !provider.is_default()).as_str()),
             ],
         )
         .prompt()
         .into_diagnostic()?
+        .index
         {
-            "yes" => true,
-            "yes (current)" => true,
-            "no" => false,
-            "no (current)" => false,
+            0 => true,
+            1 => false,
             _ => bail!("invalid response"),
         },
     };
@@ -119,17 +122,22 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         None => match inquire::Select::new(
             "Network kind:",
             vec![
-                show_is_current("mainnet", !provider.is_testnet()).as_str(),
-                show_is_current("testnet", provider.is_testnet()).as_str(),
+                ListOption::new(
+                    0,
+                    show_is_current("mainnet", !provider.is_testnet()).as_str(),
+                ),
+                ListOption::new(
+                    1,
+                    show_is_current("testnet", provider.is_testnet()).as_str(),
+                ),
             ],
         )
         .prompt()
         .into_diagnostic()?
+        .index
         {
-            "mainnet" => NetworkKind::Mainnet,
-            "mainnet (current)" => NetworkKind::Mainnet,
-            "testnet" => NetworkKind::Testnet,
-            "testnet (current)" => NetworkKind::Testnet,
+            0 => NetworkKind::Mainnet,
+            1 => NetworkKind::Testnet,
             _ => bail!("Invalid network kind"),
         },
     };

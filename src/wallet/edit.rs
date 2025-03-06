@@ -1,5 +1,6 @@
 use chrono::Local;
 use clap::Parser;
+use inquire::list_option::ListOption;
 use miette::{bail, IntoDiagnostic, Result};
 use tracing::instrument;
 
@@ -50,17 +51,16 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         None => match inquire::Select::new(
             "Set as default?",
             vec![
-                show_is_current("yes", wallet.is_default).as_str(),
-                show_is_current("no", !wallet.is_default).as_str(),
+                ListOption::new(0, show_is_current("yes", wallet.is_default).as_str()),
+                ListOption::new(1, show_is_current("no", wallet.is_default).as_str()),
             ],
         )
         .prompt()
         .into_diagnostic()?
+        .index
         {
-            "yes" => true,
-            "yes (current)" => true,
-            "no" => false,
-            "no (current)" => false,
+            0 => true,
+            1 => false,
             _ => bail!("invalid response"),
         },
     };
