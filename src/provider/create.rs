@@ -113,17 +113,20 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             .prompt()
             .into_diagnostic()?
             .split(",")
-            .map(|keyval| {
+            .flat_map(|keyval| {
+                if keyval.is_empty() {
+                    return None
+                }
                 let mut parts = keyval.split(":");
                 let key = match parts.next() {
                     Some(s) => s,
-                    None => bail!("Invalid header."),
+                    None => return Some(Err(miette::Error::msg("Invalid header"))),
                 };
                 let val = match parts.next() {
                     Some(s) => s,
-                    None => bail!("Invalid header."),
+                    None => return  Some(Err(miette::Error::msg("Invalid header"))),
                 };
-                Ok((key.to_string(), val.to_string()))
+                Some( Ok((key.to_string(), val.to_string())) )
             })
             .collect::<Result<_, miette::Error>>()?;
                     (url, headers)
