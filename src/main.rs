@@ -8,7 +8,7 @@ mod store;
 mod transaction;
 mod types;
 mod utils;
-mod wallet;
+pub mod wallet;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

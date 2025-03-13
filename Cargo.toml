@@ -17,15 +17,20 @@ keywords = ["cardano", "blockchain", "wallet", "cardano"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
 
 [dependencies]
+bech32 = "0.9.1"
+bip39 = { version = "2.0.0", features = ["rand_core"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.29", features = ["derive", "env"] }
 comfy-table = "7.1.1"
+cryptoxide = "0.4.4"
+ed25519-bip32 = "0.4.1"
 hex = { version = "0.4.3", features = ["serde"] }
 inquire = "0.7.4"
 miette = { version = "7.2.0", features = ["fancy"] }
 pallas = { version = "0.32.0", features = ["unstable", "pallas-wallet"] }
 pallas-wallet = "0.32.0"
 prost = "0.13.5"
+rand = "0.8.5"
 rand_core = {version = "0.6.4"}
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.138"
