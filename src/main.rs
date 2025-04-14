@@ -2,12 +2,14 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::{borrow::Borrow, path::PathBuf};
 use tracing_subscriber::{filter::LevelFilter, prelude::*};
 
+mod explorer;
 mod output;
 mod provider;
 mod store;
 mod transaction;
 mod types;
 mod utils;
+
 pub mod wallet;
 
 #[derive(Parser)]
@@ -56,6 +58,10 @@ enum Commands {
 
     /// Manage Wallets
     Wallet(wallet::Args),
+
+    /// Explore the blockchain
+    #[command()]
+    Explorer(explorer::Args),
 }
 
 #[derive(Clone, ValueEnum)]
@@ -120,6 +126,7 @@ async fn main() -> miette::Result<()> {
         Commands::Provider(args) => provider::run(args, &mut ctx).await?,
         Commands::Transaction(args) => transaction::run(args, &ctx).await?,
         Commands::Wallet(args) => wallet::run(args, &mut ctx).await?,
+        Commands::Explorer(args) => explorer::run(args, &mut ctx)?,
     };
 
     ctx.store.write()
