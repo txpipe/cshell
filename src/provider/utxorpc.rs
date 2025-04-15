@@ -3,8 +3,8 @@ use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utxorpc::{
-    spec::query::any_utxo_pattern::UtxoPattern, CardanoQueryClient, CardanoSyncClient,
-    ClientBuilder, InnerService,
+    spec::{query::any_utxo_pattern::UtxoPattern, sync::BlockRef},
+    CardanoQueryClient, CardanoSyncClient, ClientBuilder, InnerService,
 };
 
 use crate::{
@@ -37,13 +37,15 @@ impl UTxORPCProvider {
         }
         Ok(client_builder.build::<T>().await)
     }
-    pub async fn test(&self) -> miette::Result<()> {
-        println!("Building client...");
-        let mut client: CardanoSyncClient = self.client().await?;
 
+    pub async fn get_tip(&self) -> miette::Result<Option<BlockRef>> {
+        let mut client: CardanoSyncClient = self.client().await?;
+        client.read_tip().await.into_diagnostic()
+    }
+
+    pub async fn test(&self) -> miette::Result<()> {
         println!("Executing ReadTip method...");
-        let result = client.read_tip().await.into_diagnostic()?;
-        match result {
+        match self.get_tip().await? {
             Some(blockref) => {
                 println!(
                     "Successfull request, block tip at slot {} and hash {}.",

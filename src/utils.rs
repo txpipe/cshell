@@ -84,3 +84,40 @@ where
     }
     std::fs::write(path, contents).into_diagnostic()
 }
+
+pub fn clip(input: impl ToString, len: usize) -> String {
+    let input = input.to_string();
+    if input.len() <= len {
+        return input;
+    }
+
+    let ellipsis_len = 3; // Length of "..."
+    if len <= ellipsis_len {
+        return input.chars().take(len).collect();
+    }
+
+    let chars_to_take = len - ellipsis_len;
+    let first_half_len = chars_to_take / 2;
+    let second_half_len = chars_to_take - first_half_len;
+
+    let first_part: String = input.chars().take(first_half_len).collect();
+    let last_part: String = input.chars().skip(input.len() - second_half_len).collect();
+
+    format!("{}...{}", first_part, last_part)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clip() {
+        assert_eq!(clip("hello", 10), "hello");
+        assert_eq!(clip("hello", 5), "hello");
+        assert_eq!(clip("thisisalongstring", 10), "this...ring");
+        assert_eq!(clip("anotherlongstring", 11), "anoth...tring");
+        assert_eq!(clip("verylong", 3), "ver");
+        assert_eq!(clip("short", 2), "sh");
+        assert_eq!(clip("", 5), "");
+    }
+}

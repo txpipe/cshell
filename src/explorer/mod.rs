@@ -1,114 +1,58 @@
-use std::io;
-
-use clap::Parser;
-use miette::IntoDiagnostic;
-use pallas::storage::hardano::immutable::primary::layout;
-use ratatui::{
-    crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind},
-    layout::{Constraint, Direction, Layout},
-    style::{
-        palette::{
-            material::{BLUE, GREEN},
-            tailwind::SLATE,
-        },
-        Color, Modifier, Style, Stylize,
-    },
-    symbols::border,
-    text::{Line, Text},
-    widgets::{
-        Block, HighlightSpacing, List, ListItem, ListState, Paragraph, Scrollbar,
-        ScrollbarOrientation, ScrollbarState, Widget,
-    },
-    DefaultTerminal, Frame,
+use std::{
+    io,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
-use crate::Context;
+use clap::Parser;
+use miette::{bail, IntoDiagnostic};
+use ratatui::{
+    buffer::Buffer,
+    crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind},
+    layout::{Constraint, Layout},
+    widgets::Widget,
+    DefaultTerminal,
+};
+
+use crate::{provider::types::Provider, store::Store, Context};
+
+pub mod tabs;
+pub mod widgets;
+
+use tabs::SelectedTab;
+use widgets::{activity::ActivityMonitor, header::Header};
 
 #[derive(Parser)]
 pub struct Args {}
 
-#[derive(Default)]
-pub struct BlockList {}
-
-impl Widget for BlockList {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-    }
+#[derive(PartialEq)]
+pub enum AppState {
+    Running,
+    Done,
 }
 
-const TODO_HEADER_STYLE: Style = Style::new().fg(SLATE.c100).bg(BLUE.c800);
-const NORMAL_ROW_BG: Color = SLATE.c950;
-const ALT_ROW_BG_COLOR: Color = SLATE.c900;
-const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
-const TEXT_FG_COLOR: Color = SLATE.c200;
-const COMPLETED_TEXT_FG_COLOR: Color = GREEN.c500;
-
-const fn alternate_colors(i: usize) -> Color {
-    if i % 2 == 0 {
-        NORMAL_ROW_BG
-    } else {
-        ALT_ROW_BG_COLOR
-    }
-}
-
-#[derive(Default)]
 pub struct App {
-    done: bool,
-    list_state: ListState,
-    items: Vec<String>,
+    state: AppState,
+    selected_tab: SelectedTab,
 }
-
 impl App {
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        for i in 0..100 {
-            self.items.push(format!("Item {}", i));
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        let tick_rate = Duration::from_millis(500);
+        let mut last_tick = Instant::now();
+        while self.state == AppState::Running {
+            terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
+            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+            if event::poll(timeout)? {
+                if let event::Event::Key(key) = event::read()? {
+                    self.handle_key(key)
+                }
+            }
+
+            if last_tick.elapsed() >= tick_rate {
+                // self.on_tick();
+                last_tick = Instant::now();
+            }
         }
-
-        while !self.done {
-            terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
-        }
-        Ok(())
-    }
-
-    fn draw(&mut self, frame: &mut Frame) {
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(20), Constraint::Fill(1)])
-            .split(frame.area());
-
-        let menu = Block::default().title("Menu").border_set(border::THICK);
-        //let scroll =
-        // Scrollbar::default().orientation(ScrollbarOrientation::VerticalRight);
-
-        let items = self
-            .items
-            .iter()
-            .enumerate()
-            .map(|(i, item)| {
-                let color = alternate_colors(i);
-                ListItem::from(item.as_str()).bg(color)
-            })
-            .collect::<Vec<_>>();
-
-        let list = List::new(items)
-            .highlight_style(SELECTED_STYLE)
-            .highlight_symbol(">")
-            .highlight_spacing(HighlightSpacing::Always);
-
-        frame.render_widget(menu, layout[0]);
-        frame.render_stateful_widget(list, layout[1], &mut self.list_state);
-    }
-
-    fn handle_events(&mut self) -> io::Result<()> {
-        let event = event::read()?;
-
-        if let event::Event::Key(key) = event {
-            self.handle_key(key);
-        };
-
         Ok(())
     }
 
@@ -117,39 +61,87 @@ impl App {
             return;
         }
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.done = true,
-            KeyCode::Char('h') | KeyCode::Left => self.select_none(),
-            KeyCode::Char('j') | KeyCode::Down => self.select_next(),
-            KeyCode::Char('k') | KeyCode::Up => self.select_previous(),
-            KeyCode::Char('g') | KeyCode::Home => self.select_first(),
-            KeyCode::Char('G') | KeyCode::End => self.select_last(),
+            KeyCode::Char('q') | KeyCode::Esc => self.state = AppState::Done,
+            KeyCode::Tab => self.select_next_tab(),
+            KeyCode::BackTab => self.select_previous_tab(),
             _ => {}
+        }
+
+        if let SelectedTab::Accounts(tab) = &mut self.selected_tab {
+            match key.code {
+                KeyCode::Char('j') | KeyCode::Down => tab.select_next(),
+                KeyCode::Char('k') | KeyCode::Up => tab.select_previous(),
+                KeyCode::Char('g') | KeyCode::Home => tab.select_first(),
+                KeyCode::Char('G') | KeyCode::End => tab.select_last(),
+                _ => {}
+            }
         }
     }
 
-    fn select_none(&mut self) {
-        self.list_state.select(None);
+    fn select_previous_tab(&mut self) {
+        self.selected_tab = self.selected_tab.previous();
     }
 
-    fn select_next(&mut self) {
-        self.list_state.select_next();
-    }
-    fn select_previous(&mut self) {
-        self.list_state.select_previous();
-    }
-
-    fn select_first(&mut self) {
-        self.list_state.select_first();
-    }
-
-    fn select_last(&mut self) {
-        self.list_state.select_last();
+    fn select_next_tab(&mut self) {
+        self.selected_tab = self.selected_tab.next();
     }
 }
 
-pub fn run(args: Args, ctx: &mut Context) -> miette::Result<()> {
+impl Widget for &App {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut Buffer) {
+        let [header_area, sparkline_area, inner_area] = Layout::vertical([
+            Constraint::Length(5), // Header
+            Constraint::Length(5), // Sparkline
+            Constraint::Fill(1),   // Rest
+        ])
+        .areas(area);
+
+        let header = Header::new(self.selected_tab.clone());
+        header.render(header_area, buf);
+
+        let sparkline = ActivityMonitor::new();
+        sparkline.render(sparkline_area, buf);
+
+        self.selected_tab.clone().render(inner_area, buf);
+    }
+}
+
+pub struct ExplorerContext {
+    pub store: Store,
+    pub provider: Provider,
+}
+impl TryFrom<&Context> for ExplorerContext {
+    type Error = miette::Error;
+    fn try_from(value: &Context) -> Result<Self, Self::Error> {
+        let provider = match value.store.default_provider() {
+            Some(provider) => provider,
+            None => match value.store.providers().first() {
+                Some(provider) => provider,
+                None => bail!("No providers configured"),
+            },
+        };
+        Ok(Self {
+            store: value.store.clone(),
+            provider: provider.clone(),
+        })
+    }
+}
+impl TryFrom<&Context> for App {
+    type Error = miette::Error;
+    fn try_from(value: &Context) -> Result<Self, Self::Error> {
+        let context: Arc<ExplorerContext> = Arc::new(value.try_into()?);
+        Ok(Self {
+            selected_tab: SelectedTab::Accounts(widgets::accounts_tab::AccountsTab::new(
+                context.clone(),
+            )),
+            state: AppState::Running,
+        })
+    }
+}
+
+pub fn run(_args: Args, ctx: &Context) -> miette::Result<()> {
     let mut terminal = ratatui::init();
-    let mut app = App::default();
+    let app = App::try_from(ctx)?;
     let result = app.run(&mut terminal);
     ratatui::restore();
     result.into_diagnostic()
