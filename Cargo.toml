@@ -22,9 +22,10 @@ bip39 = { version = "2.0.0", features = ["rand_core"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.29", features = ["derive", "env"] }
 comfy-table = "7.1.1"
-crossterm = "0.29.0"
+crossterm = { version = "0.28.1", features = ["event-stream"] }
 cryptoxide = "0.4.4"
 ed25519-bip32 = "0.4.1"
+futures = "0.3.31"
 hex = { version = "0.4.3", features = ["serde"] }
 inquire = "0.7.4"
 miette = { version = "7.2.0", features = ["fancy"] }

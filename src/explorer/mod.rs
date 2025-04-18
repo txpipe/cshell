@@ -1,56 +1,73 @@
-use std::{
-    io,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use clap::Parser;
-use miette::{bail, IntoDiagnostic};
+use event::{AppEvent, Event, EventHandler};
+use miette::{bail, Context as _, IntoDiagnostic};
 use ratatui::{
-    buffer::Buffer,
-    crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind},
+    crossterm::event::{KeyCode, KeyEvent, KeyEventKind},
     layout::{Constraint, Layout},
-    widgets::Widget,
-    DefaultTerminal,
+    widgets::ListState,
+    DefaultTerminal, Frame,
 };
+use strum::Display;
 
-use crate::{provider::types::Provider, store::Store, Context};
+use crate::{provider::types::Provider, store::Store, types::DetailedBalance, Context};
 
-pub mod tabs;
+pub mod event;
 pub mod widgets;
 
-use tabs::SelectedTab;
-use widgets::{activity::ActivityMonitor, header::Header};
+use widgets::{
+    accounts_tab::AccountsTab, activity::ActivityMonitor, blocks_tab::BlocksTab, header::Header,
+    transactions_tab::TransactionsTab,
+};
+
+#[derive(Default)]
+pub struct ChainState {
+    pub tip: Option<u64>,
+    pub balances: HashMap<String, DetailedBalance>,
+}
+
+#[derive(Clone, Display)]
+pub enum SelectedTab {
+    #[strum(to_string = "Accounts")]
+    Accounts(AccountsTab),
+    #[strum(to_string = "Blocks")]
+    Blocks(BlocksTab),
+    #[strum(to_string = "Txs")]
+    Transactions(TransactionsTab),
+}
 
 #[derive(Parser)]
 pub struct Args {}
 
-#[derive(PartialEq)]
-pub enum AppState {
-    Running,
-    Done,
-}
-
 pub struct App {
-    state: AppState,
+    done: bool,
     selected_tab: SelectedTab,
+    chain: ChainState,
+    accounts_tab_list_state: ListState,
+    pub events: EventHandler,
+    pub context: Arc<ExplorerContext>,
 }
 impl App {
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        let tick_rate = Duration::from_millis(500);
-        let mut last_tick = Instant::now();
-        while self.state == AppState::Running {
-            terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
-            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
-            if event::poll(timeout)? {
-                if let event::Event::Key(key) = event::read()? {
-                    self.handle_key(key)
+    /// Run the application's main loop.
+    pub async fn run(mut self, mut terminal: DefaultTerminal) -> miette::Result<()> {
+        while !self.done {
+            terminal
+                .draw(|frame| self.draw(frame))
+                .into_diagnostic()
+                .context("rendering")?;
+            match self.events.next().await? {
+                Event::Crossterm(event) => {
+                    if let crossterm::event::Event::Key(key_event) = event {
+                        self.handle_key(key_event)
+                    }
                 }
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                // self.on_tick();
-                last_tick = Instant::now();
+                Event::App(app_event) => match app_event {
+                    AppEvent::NewTip(tip) => self.handle_new_tip(tip),
+                    AppEvent::BalanceUpdate((address, balance)) => {
+                        self.handle_balance_update(address, balance)
+                    }
+                },
             }
         }
         Ok(())
@@ -60,49 +77,86 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return;
         }
+
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.state = AppState::Done,
+            KeyCode::Char('q') | KeyCode::Esc => self.done = true,
             KeyCode::Tab => self.select_next_tab(),
             KeyCode::BackTab => self.select_previous_tab(),
             _ => {}
         }
 
-        if let SelectedTab::Accounts(tab) = &mut self.selected_tab {
+        if let SelectedTab::Accounts(_) = &mut self.selected_tab {
             match key.code {
-                KeyCode::Char('j') | KeyCode::Down => tab.select_next(),
-                KeyCode::Char('k') | KeyCode::Up => tab.select_previous(),
-                KeyCode::Char('g') | KeyCode::Home => tab.select_first(),
-                KeyCode::Char('G') | KeyCode::End => tab.select_last(),
+                KeyCode::Char('j') | KeyCode::Down => self.accounts_tab_list_state.select_next(),
+                KeyCode::Char('k') | KeyCode::Up => self.accounts_tab_list_state.select_previous(),
+                KeyCode::Char('g') | KeyCode::Home => self.accounts_tab_list_state.select_first(),
+                KeyCode::Char('G') | KeyCode::End => self.accounts_tab_list_state.select_last(),
                 _ => {}
             }
         }
     }
 
+    fn handle_new_tip(&mut self, tip: Option<u64>) {
+        self.chain.tip = tip;
+    }
+
+    fn handle_balance_update(&mut self, key: String, balance: DetailedBalance) {
+        self.chain.balances.insert(key, balance);
+        self.selected_tab = match &self.selected_tab {
+            SelectedTab::Accounts(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
+            x => x.clone(),
+        }
+    }
+
     fn select_previous_tab(&mut self) {
-        self.selected_tab = self.selected_tab.previous();
+        self.selected_tab = match &self.selected_tab {
+            SelectedTab::Accounts(tab) => {
+                SelectedTab::Transactions(TransactionsTab::new(tab.context.clone()))
+            }
+            SelectedTab::Blocks(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
+            SelectedTab::Transactions(tab) => {
+                SelectedTab::Blocks(BlocksTab::new(tab.context.clone()))
+            }
+        }
     }
 
     fn select_next_tab(&mut self) {
-        self.selected_tab = self.selected_tab.next();
+        self.selected_tab = match &self.selected_tab {
+            SelectedTab::Accounts(tab) => SelectedTab::Blocks(BlocksTab::new(tab.context.clone())),
+            SelectedTab::Blocks(tab) => {
+                SelectedTab::Transactions(TransactionsTab::new(tab.context.clone()))
+            }
+            SelectedTab::Transactions(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
+        }
     }
-}
 
-impl Widget for &App {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut Buffer) {
+    fn draw(&mut self, frame: &mut Frame) {
         let [header_area, sparkline_area, inner_area] = Layout::vertical([
             Constraint::Length(5), // Header
             Constraint::Length(5), // Sparkline
             Constraint::Fill(1),   // Rest
         ])
-        .areas(area);
+        .areas(frame.area());
 
-        let header = Header::new(self.selected_tab.clone());
-        header.render(header_area, buf);
+        let header = Header::from(&*self);
+        frame.render_widget(header, header_area);
 
-        let sparkline = ActivityMonitor::new();
-        sparkline.render(sparkline_area, buf);
+        let activity = ActivityMonitor::new();
+        frame.render_widget(activity, sparkline_area);
 
-        self.selected_tab.clone().render(inner_area, buf);
+        match self.selected_tab.clone() {
+            SelectedTab::Accounts(accounts_tab) => {
+                frame.render_stateful_widget(
+                    accounts_tab,
+                    inner_area,
+                    &mut self.accounts_tab_list_state,
+                );
+            }
+            SelectedTab::Blocks(blocks_tab) => frame.render_widget(blocks_tab, inner_area),
+            SelectedTab::Transactions(transactions_tab) => {
+                frame.render_widget(transactions_tab, inner_area)
+            }
+        }
     }
 }
 
@@ -131,18 +185,23 @@ impl TryFrom<&Context> for App {
     fn try_from(value: &Context) -> Result<Self, Self::Error> {
         let context: Arc<ExplorerContext> = Arc::new(value.try_into()?);
         Ok(Self {
-            selected_tab: SelectedTab::Accounts(widgets::accounts_tab::AccountsTab::new(
-                context.clone(),
-            )),
-            state: AppState::Running,
+            context: context.clone(),
+            selected_tab: SelectedTab::Accounts(widgets::accounts_tab::AccountsTab {
+                context: context.clone(),
+                balances: Default::default(),
+            }),
+            done: false,
+            chain: ChainState::default(),
+            events: EventHandler::new(context.clone()),
+            accounts_tab_list_state: ListState::default(),
         })
     }
 }
 
-pub fn run(_args: Args, ctx: &Context) -> miette::Result<()> {
-    let mut terminal = ratatui::init();
+pub async fn run(_args: Args, ctx: &Context) -> miette::Result<()> {
+    let terminal = ratatui::init();
     let app = App::try_from(ctx)?;
-    let result = app.run(&mut terminal);
+    let result = app.run(terminal).await;
     ratatui::restore();
-    result.into_diagnostic()
+    result
 }
