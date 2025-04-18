@@ -114,8 +114,8 @@ mod tests {
     fn test_clip() {
         assert_eq!(clip("hello", 10), "hello");
         assert_eq!(clip("hello", 5), "hello");
-        assert_eq!(clip("thisisalongstring", 10), "this...ring");
-        assert_eq!(clip("anotherlongstring", 11), "anoth...tring");
+        assert_eq!(clip("thisisalongstring", 10), "thi...ring");
+        assert_eq!(clip("anotherlongstring", 11), "anot...ring");
         assert_eq!(clip("verylong", 3), "ver");
         assert_eq!(clip("short", 2), "sh");
         assert_eq!(clip("", 5), "");
