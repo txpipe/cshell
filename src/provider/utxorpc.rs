@@ -162,7 +162,7 @@ impl UTxORPCProvider {
             .into_diagnostic()
             .context("failed to query utxos")?;
 
-        Ok(utxos
+        let mut result = utxos
             .items
             .into_iter()
             .map(|utxo| {
@@ -202,6 +202,10 @@ impl UTxORPCProvider {
                     },
                 }
             })
-            .collect())
+            .collect::<DetailedBalance>();
+
+        result.sort_by(|x, y| x.tx.cmp(&y.tx));
+
+        Ok(result)
     }
 }

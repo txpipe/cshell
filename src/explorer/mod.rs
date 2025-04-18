@@ -17,8 +17,8 @@ pub mod event;
 pub mod widgets;
 
 use widgets::{
-    accounts_tab::AccountsTab, activity::ActivityMonitor, blocks_tab::BlocksTab, header::Header,
-    transactions_tab::TransactionsTab,
+    accounts_tab::AccountsTab, activity::ActivityMonitor, blocks_tab::BlocksTab, footer::Footer,
+    header::Header, help::HelpPopup, transactions_tab::TransactionsTab,
 };
 
 #[derive(Default)]
@@ -42,6 +42,7 @@ pub struct Args {}
 
 pub struct App {
     done: bool,
+    should_show_help: bool,
     selected_tab: SelectedTab,
     chain: ChainState,
     accounts_tab_list_state: ListState,
@@ -78,19 +79,39 @@ impl App {
             return;
         }
 
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.done = true,
-            KeyCode::Tab => self.select_next_tab(),
-            KeyCode::BackTab => self.select_previous_tab(),
-            _ => {}
-        }
-
-        if let SelectedTab::Accounts(_) = &mut self.selected_tab {
+        if !self.should_show_help {
             match key.code {
-                KeyCode::Char('j') | KeyCode::Down => self.accounts_tab_list_state.select_next(),
-                KeyCode::Char('k') | KeyCode::Up => self.accounts_tab_list_state.select_previous(),
-                KeyCode::Char('g') | KeyCode::Home => self.accounts_tab_list_state.select_first(),
-                KeyCode::Char('G') | KeyCode::End => self.accounts_tab_list_state.select_last(),
+                KeyCode::Char('q') | KeyCode::Esc => {
+                    if self.should_show_help {
+                        self.should_show_help = false
+                    } else {
+                        self.done = true
+                    }
+                }
+                KeyCode::Tab => self.select_next_tab(),
+                KeyCode::BackTab => self.select_previous_tab(),
+                KeyCode::Char('?') => self.should_show_help = true,
+                _ => {}
+            }
+
+            if let SelectedTab::Accounts(_) = &mut self.selected_tab {
+                match key.code {
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        self.accounts_tab_list_state.select_next()
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        self.accounts_tab_list_state.select_previous()
+                    }
+                    KeyCode::Char('g') | KeyCode::Home => {
+                        self.accounts_tab_list_state.select_first()
+                    }
+                    KeyCode::Char('G') | KeyCode::End => self.accounts_tab_list_state.select_last(),
+                    _ => {}
+                }
+            }
+        } else {
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => self.should_show_help = false,
                 _ => {}
             }
         }
@@ -131,10 +152,11 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        let [header_area, sparkline_area, inner_area] = Layout::vertical([
+        let [header_area, sparkline_area, inner_area, footer_area] = Layout::vertical([
             Constraint::Length(5), // Header
             Constraint::Length(5), // Sparkline
             Constraint::Fill(1),   // Rest
+            Constraint::Length(1), // Footer
         ])
         .areas(frame.area());
 
@@ -156,6 +178,12 @@ impl App {
             SelectedTab::Transactions(transactions_tab) => {
                 frame.render_widget(transactions_tab, inner_area)
             }
+        }
+
+        frame.render_widget(Footer::new(), footer_area);
+
+        if self.should_show_help {
+            frame.render_widget(HelpPopup::new(), frame.area());
         }
     }
 }
@@ -191,6 +219,7 @@ impl TryFrom<&Context> for App {
                 balances: Default::default(),
             }),
             done: false,
+            should_show_help: false,
             chain: ChainState::default(),
             events: EventHandler::new(context.clone()),
             accounts_tab_list_state: ListState::default(),
