@@ -8,7 +8,6 @@ mod info;
 mod list;
 mod test;
 pub mod types;
-pub mod utxorpc;
 
 #[derive(Parser)]
 pub struct Args {
