@@ -7,12 +7,7 @@ use tracing::instrument;
 
 use crate::{output::OutputFormatter, utils::Name};
 
-use super::{types::Provider, utxorpc::UTxORPCProvider};
-
-#[derive(clap::ValueEnum, Clone)]
-enum ProviderKind {
-    Utxorpc,
-}
+use super::types::Provider;
 
 #[derive(clap::ValueEnum, Clone, PartialEq)]
 enum NetworkKind {
@@ -31,10 +26,6 @@ pub struct Args {
     /// Name to identify the provider.
     #[arg(long)]
     name: Option<String>,
-
-    /// Provider kind.
-    #[arg(long)]
-    kind: Option<ProviderKind>,
 
     /// Whether to set as default provider.
     #[arg(long)]
@@ -71,17 +62,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         )
     }
 
-    let kind = match args.kind {
-        Some(kind) => kind,
-        None => match inquire::Select::new("Kind of provider:", vec!["UTxORPC"])
-            .prompt()
-            .into_diagnostic()?
-        {
-            "UTxORPC" => ProviderKind::Utxorpc,
-            _ => bail!("Invalid kind."),
-        },
-    };
-
     let newtork_kind = match args.network_kind {
         Some(network_kind) => network_kind,
         None => match inquire::Select::new("Network kind:", vec!["mainnet", "testnet"])
@@ -95,19 +75,16 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     };
     let is_testnet = newtork_kind == NetworkKind::Testnet;
 
-    // Provider specific inquires.
-    let provider = match kind {
-        ProviderKind::Utxorpc => {
-            let (url, headers) = match args.parameters {
-                Some(parameters) => {
-                    let parameters: UTxORPCParameters = serde_json::from_str(&parameters)
-                        .into_diagnostic()
-                        .context("Invalid parameters")?;
-                    (parameters.url, parameters.headers)
-                }
-                None => {
-                    let url = inquire::Text::new("URL:").prompt().into_diagnostic()?;
-                    let headers: HashMap<String, String> = inquire::Text::new(
+    let (url, headers) = match args.parameters {
+        Some(parameters) => {
+            let parameters: UTxORPCParameters = serde_json::from_str(&parameters)
+                .into_diagnostic()
+                .context("Invalid parameters")?;
+            (parameters.url, parameters.headers)
+        }
+        None => {
+            let url = inquire::Text::new("URL:").prompt().into_diagnostic()?;
+            let headers: HashMap<String, String> = inquire::Text::new(
                 "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
             )
             .prompt()
@@ -115,7 +92,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             .split(",")
             .flat_map(|keyval| {
                 if keyval.is_empty() {
-                    return None
+                    return None;
                 }
                 let mut parts = keyval.split(":");
                 let key = match parts.next() {
@@ -124,26 +101,24 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
                 };
                 let val = match parts.next() {
                     Some(s) => s,
-                    None => return  Some(Err(miette::Error::msg("Invalid header"))),
+                    None => return Some(Err(miette::Error::msg("Invalid header"))),
                 };
-                Some( Ok((key.to_string(), val.to_string())) )
+                Some(Ok((key.to_string(), val.to_string())))
             })
             .collect::<Result<_, miette::Error>>()?;
-                    (url, headers)
-                }
-            };
-            Provider::UTxORPC(UTxORPCProvider {
-                name,
-                is_default: Some(ctx.store.providers().is_empty()),
-                is_testnet: Some(is_testnet),
-                url,
-                headers: if headers.is_empty() {
-                    None
-                } else {
-                    Some(headers)
-                },
-            })
+            (url, headers)
         }
+    };
+    let provider = Provider {
+        name,
+        is_default: Some(ctx.store.providers().is_empty()),
+        is_testnet: Some(is_testnet),
+        url,
+        headers: if headers.is_empty() {
+            None
+        } else {
+            Some(headers)
+        },
     };
 
     ctx.store.add_provider(&provider)?;
