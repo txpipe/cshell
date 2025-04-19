@@ -91,45 +91,9 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         Some(url) => url,
         None => inquire::Text::new("URL:").prompt().into_diagnostic()?,
     };
-    let headers: HashMap<String, String> = inquire::Text::new(
-        "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
-    )
-    .prompt()
-    .into_diagnostic()?
-    .split(",")
-    .flat_map(|keyval| {
-        if keyval.is_empty() {
-            return None;
-        }
-        let mut parts = keyval.split(":");
-        let key = match parts.next() {
-            Some(s) => s,
-            None => return Some(Err(miette::Error::msg("Invalid header"))),
-        };
-        let val = match parts.next() {
-            Some(s) => s,
-            None => return Some(Err(miette::Error::msg("Invalid header"))),
-        };
-        Some(Ok((key.to_string(), val.to_string())))
-    })
-    .collect::<Result<_, miette::Error>>()?;
-
-    let trp_url = match args.trp_url {
-        Some(url) => Some(url),
-        None => {
-            let response = inquire::Text::new("TRP URL (leave empty for undefined):")
-                .prompt()
-                .into_diagnostic()?;
-            if response.is_empty() {
-                None
-            } else {
-                Some(response)
-            }
-        }
-    };
-    let mut trp_headers = None;
-    if trp_url.is_some() {
-        let aux: HashMap<String, String> = inquire::Text::new(
+    let headers: HashMap<String, String> = match args.utxorpc_headers {
+        Some(aux) => serde_json::from_str(&aux).into_diagnostic()?,
+        None => inquire::Text::new(
             "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
         )
         .prompt()
@@ -150,7 +114,50 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             };
             Some(Ok((key.to_string(), val.to_string())))
         })
-        .collect::<Result<_, miette::Error>>()?;
+        .collect::<Result<_, miette::Error>>()?,
+    };
+
+    let trp_url = match args.trp_url {
+        Some(url) => Some(url),
+        None => {
+            let response = inquire::Text::new("TRP URL (leave empty for undefined):")
+                .prompt()
+                .into_diagnostic()?;
+            if response.is_empty() {
+                None
+            } else {
+                Some(response)
+            }
+        }
+    };
+    let mut trp_headers = None;
+    if trp_url.is_some() {
+        let aux: HashMap<String, String> = match args.trp_headers {
+            Some(inner) => serde_json::from_str(&inner).into_diagnostic()?,
+
+            None => inquire::Text::new(
+                "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
+            )
+            .prompt()
+            .into_diagnostic()?
+            .split(",")
+            .flat_map(|keyval| {
+                if keyval.is_empty() {
+                    return None;
+                }
+                let mut parts = keyval.split(":");
+                let key = match parts.next() {
+                    Some(s) => s,
+                    None => return Some(Err(miette::Error::msg("Invalid header"))),
+                };
+                let val = match parts.next() {
+                    Some(s) => s,
+                    None => return Some(Err(miette::Error::msg("Invalid header"))),
+                };
+                Some(Ok((key.to_string(), val.to_string())))
+            })
+            .collect::<Result<_, miette::Error>>()?,
+        };
 
         if !aux.is_empty() {
             trp_headers = Some(aux);

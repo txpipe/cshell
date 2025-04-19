@@ -49,10 +49,12 @@ fi
 # Create provider
 OUTPUT=$(run provider create \
   --name test \
-  --kind utxorpc \
   --is-default true \
   --network-kind testnet \
-  --parameters '{"url":"https://preprod.utxorpc-v0.demeter.run","headers":{"dmtr-api-key":"utxorpc1yzpcjdkeuqgy5pfg69z"}}'
+  --utxorpc-url "https://preprod.utxorpc-v0.demeter.run" \
+  --utxorpc-headers '{"dmtr-api-key":"utxorpc1yzpcjdkeuqgy5pfg69z"}' \
+  --trp-url "https://preprod.trp-m1.demeter.run" \
+  --trp-headers '{"dmtr-api-key":"trpyzpcjdkeuqgy5pfg69z"}'
 )
 NAME=$(echo "$OUTPUT" | jq -r '.name' )
 if [[ "$NAME" == "test" ]]; then
