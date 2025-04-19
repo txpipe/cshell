@@ -26,21 +26,23 @@ cryptoxide = "0.4.4"
 ed25519-bip32 = "0.4.1"
 hex = { version = "0.4.3", features = ["serde"] }
 inquire = "0.7.4"
+jsonrpsee = { version = "0", features = ["client"] }
 miette = { version = "7.2.0", features = ["fancy"] }
-pallas = { version = "0.32.0", features = ["unstable", "pallas-wallet"] }
-pallas-wallet = "0.32.0"
+pallas = { version = "1.0.0-alpha.1", features = ["hardano"] }
 prost = "0.13.5"
 rand = "0.8.5"
 rand_core = {version = "0.6.4"}
 serde = { version = "1.0.217", features = ["derive"] }
 serde_with = "3.12.0"
-serde_json = "1.0.138"
+serde_json = "1.0.140"
 slug = "0.1.5"
 tokio = { version = "1.43.0", features = ["full"] }
 tokio-stream = "0.1.17"
 toml = "0.8.20"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+tx3-lang = "0.2.0"
+tx3-cardano = "0.2.0"
 url = { version = "2.5.0", features = ["serde"] }
 utxorpc = "0.10.0"
 
