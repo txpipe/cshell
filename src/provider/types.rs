@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 
 use comfy_table::Table;
-use miette::{Context, IntoDiagnostic};
+use jsonrpsee::{
+    core::{client::ClientT, params::ObjectParams},
+    http_client::HttpClient,
+};
+use miette::{bail, Context, IntoDiagnostic};
 use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -15,6 +19,12 @@ use crate::{
     types::{Asset, Balance, BalanceAsset, Datum, DetailedBalance, UTxO},
     utils::Name,
 };
+
+#[derive(Serialize, Deserialize)]
+pub struct TrpResponse {
+    #[serde(with = "hex::serde")]
+    pub tx: Vec<u8>,
+}
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(tag = "type")]
@@ -235,6 +245,24 @@ impl Provider {
             .await
             .into_diagnostic()
             .map(|x| x.first().unwrap().to_vec())
+    }
+
+    pub async fn trp_resolve(&self, params: &ObjectParams) -> miette::Result<TrpResponse> {
+        let Some(trp_url) = &self.trp_url else {
+            bail!("missing TRP configuration for this provider")
+        };
+
+        let mut client_builder = HttpClient::builder();
+        if let Some(headers) = &self.trp_headers {
+            let headermap = headers.try_into().into_diagnostic()?;
+            client_builder = client_builder.set_headers(headermap);
+        }
+        let client = client_builder.build(trp_url).into_diagnostic()?;
+
+        client
+            .request("trp.resolve", params.to_owned())
+            .await
+            .into_diagnostic()
     }
 }
 

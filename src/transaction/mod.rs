@@ -1,12 +1,8 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use jsonrpsee::{
-    core::{client::ClientT, params::ObjectParams},
-    http_client::HttpClient,
-};
+use jsonrpsee::core::params::ObjectParams;
 use miette::{bail, Context, IntoDiagnostic};
-use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use tx3_lang::Protocol;
 
@@ -20,17 +16,20 @@ pub struct Args {
     provider: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct TrpResponse {
-    #[serde(with = "hex::serde")]
-    tx: Vec<u8>,
-}
-
 #[derive(Subcommand)]
 enum Commands {}
 
 #[instrument("transaction", skip_all)]
 pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
+    let provider = match args.provider {
+        Some(name) => ctx.store.find_provider(&name),
+        None => ctx.store.default_provider(),
+    };
+
+    let Some(provider) = provider else {
+        bail!("Provider not found")
+    };
+
     let protocol = Protocol::from_file(args.tx3_file)
         .load()
         .into_diagnostic()
@@ -68,7 +67,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
                     .iter()
                     .find(|x| x.name.to_string() == wallet)
                     .unwrap()
-                    .address(true);
+                    .address(provider.is_testnet());
                 argvalues.insert(key, serde_json::Value::String(address.to_bech32().unwrap()));
             }
             tx3_lang::ir::Type::Int => {
@@ -84,10 +83,6 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         };
     }
 
-    let client = HttpClient::builder()
-        .build("http://localhost:8000")
-        .into_diagnostic()?;
-
     let mut builder = ObjectParams::new();
     builder
         .insert(
@@ -101,11 +96,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         .unwrap();
     builder.insert("args", argvalues).unwrap();
 
-    let response: TrpResponse = client
-        .request("trp.resolve", builder)
-        .await
-        .into_diagnostic()?;
-
+    let response = provider.trp_resolve(&builder).await?;
     let options = ctx
         .store
         .wallets()
@@ -133,19 +124,10 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         .into_diagnostic()?;
 
     let signed = wallet.sign(response.tx, &password)?;
-    let provider = match args.provider {
-        Some(name) => ctx.store.find_provider(&name),
-        None => ctx.store.default_provider(),
-    };
-
-    let Some(provider) = provider else {
-        bail!("Provider not found")
-    };
-
     let txhash = provider.submit(&signed).await?;
 
-    println!("submitted transaction: {}", hex::encode(&signed));
-    println!("hash: {}", hex::encode(&txhash));
+    println!("Submitted TX: {}", hex::encode(&signed));
+    println!("TX Hash: {}", hex::encode(&txhash));
 
     Ok(())
 }

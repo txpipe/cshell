@@ -116,6 +116,8 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
                 .join(",")
         })
         .unwrap_or("".to_string());
+
+    println!("current headers: {current_headers}");
     let new_headers: HashMap<String, String> = inquire::Text::new(
         "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
     )
