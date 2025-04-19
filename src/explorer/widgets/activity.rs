@@ -21,22 +21,31 @@ fn get_last_slots(data: &[ChainBlock]) -> Vec<u64> {
 
     let last_200_slots = &data[start_index..];
     let max_slot = last_200_slots.last().unwrap().slot;
+    let min_slot = if max_slot > 200 { max_slot - 200 } else { 0 };
 
     for item in last_200_slots {
-        if item.slot <= max_slot && item.slot > max_slot - 200 {
+        if item.slot <= max_slot && item.slot > min_slot {
             let index = (max_slot - item.slot) as usize;
             result[index] = item.tx_count as u64 + 1;
         }
     }
+    result.reverse();
     result
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ActivityMonitor {
     pub points: VecDeque<u64>,
     pub last_block_seen: Option<DateTime<Utc>>,
 }
-
+impl Default for ActivityMonitor {
+    fn default() -> Self {
+        Self {
+            last_block_seen: None,
+            points: vec![0; 200].into(),
+        }
+    }
+}
 impl From<&App> for ActivityMonitor {
     fn from(value: &App) -> Self {
         Self {
@@ -51,6 +60,8 @@ impl Widget for ActivityMonitor {
     where
         Self: Sized,
     {
+        let size = area.width as usize;
+        let points: Vec<u64> = self.points.range((200 - size + 1)..).cloned().collect();
         let (title, color) = match self.last_block_seen {
             Some(dt) => {
                 let seconds = (Utc::now() - dt).num_seconds();
@@ -72,7 +83,7 @@ impl Widget for ActivityMonitor {
                     .border_style(Style::new().dark_gray())
                     .title(title),
             )
-            .data(&self.points)
+            .data(&points)
             .style(Style::default().fg(color));
         sparkline.render(area, buf);
     }

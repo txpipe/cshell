@@ -48,7 +48,7 @@ impl StatefulWidget for AccountsTab {
         let [accounts_area, details_area] =
             Layout::horizontal([Constraint::Length(30), Constraint::Fill(1)]).areas(area);
         let [summary_area, utxos_area] =
-            Layout::vertical([Constraint::Length(6), Constraint::Fill(1)]).areas(details_area);
+            Layout::vertical([Constraint::Length(7), Constraint::Fill(1)]).areas(details_area);
 
         let block = Block::bordered().title(Line::raw(" Accounts ").centered());
 

@@ -21,6 +21,7 @@ pub enum Event {
 pub enum AppEvent {
     Reset(u64),
     NewTip(ChainBlock),
+    UndoTip(ChainBlock),
     BalanceUpdate((String, DetailedBalance)),
 }
 
@@ -185,7 +186,7 @@ impl EventTask {
                             number: header.height,
                             tx_count,
                         };
-                        self.send(Event::App(AppEvent::NewTip(chainblock)))?;
+                        self.send(Event::App(AppEvent::UndoTip(chainblock)))?;
                         self.check_balances(&mut balances).await?;
                     }
                     TipEvent::Reset(point) => {

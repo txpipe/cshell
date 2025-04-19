@@ -83,6 +83,7 @@ impl App {
                 Event::App(app_event) => match app_event {
                     AppEvent::Reset(tip) => self.handle_reset(tip),
                     AppEvent::NewTip(tip) => self.handle_new_tip(tip),
+                    AppEvent::UndoTip(tip) => self.handle_undo_tip(tip),
                     AppEvent::BalanceUpdate((address, balance)) => {
                         self.handle_balance_update(address, balance)
                     }
@@ -165,8 +166,10 @@ impl App {
     }
 
     fn handle_tick(&mut self) {
-        self.activity_monitor.points.push_front(0);
-        self.activity_monitor.points.pop_back();
+        // self.activity_monitor.points.push_front(0);
+        // self.activity_monitor.points.pop_back();
+        self.activity_monitor.points.push_back(0);
+        self.activity_monitor.points.pop_front();
     }
 
     fn handle_reset(&mut self, tip: u64) {
@@ -179,6 +182,27 @@ impl App {
         self.chain.tip = Some(tip.slot);
         self.chain.last_block_seen = Some(Utc::now());
         self.chain.blocks.push(tip);
+        self.activity_monitor = ActivityMonitor::from(&*self);
+        self.blocks_tab_state.scroll_state = self
+            .blocks_tab_state
+            .scroll_state
+            .content_length(self.chain.blocks.len() * 3 - 2);
+        self.selected_tab = match &self.selected_tab {
+            SelectedTab::Blocks(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
+            x => x.clone(),
+        }
+    }
+
+    fn handle_undo_tip(&mut self, tip: ChainBlock) {
+        self.chain.tip = Some(tip.slot);
+        self.chain.last_block_seen = Some(Utc::now());
+        self.chain.blocks = self
+            .chain
+            .blocks
+            .clone()
+            .into_iter()
+            .filter(|block| block.number >= tip.number)
+            .collect();
         self.activity_monitor = ActivityMonitor::from(&*self);
         self.blocks_tab_state.scroll_state = self
             .blocks_tab_state
