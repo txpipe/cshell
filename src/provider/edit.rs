@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
 use clap::Parser;
 use inquire::list_option::ListOption;
@@ -9,24 +9,7 @@ use crate::{
     utils::{show_is_current, Name},
 };
 
-use super::{types::Provider, utxorpc::UTxORPCProvider};
-
-#[derive(clap::ValueEnum, Clone, Copy)]
-enum ProviderKind {
-    Utxorpc,
-}
-
-impl Display for ProviderKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ProviderKind::Utxorpc => "utxorpc",
-            }
-        )
-    }
-}
+use super::types::Provider;
 
 #[derive(clap::ValueEnum, Clone, PartialEq)]
 enum NetworkKind {
@@ -42,9 +25,6 @@ pub struct Args {
     /// Name to identify the provider.
     #[arg(long)]
     new_name: Option<String>,
-
-    /// Provider kind.
-    kind: Option<ProviderKind>,
 
     /// Whether to set as default provider.
     #[arg(long)]
@@ -74,28 +54,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             Name::try_from(new_name)?
         }
         Some(new_name) => Name::try_from(new_name)?,
-    };
-
-    let new_kind = match args.kind {
-        Some(kind) => kind,
-        None => match inquire::Select::new(
-            "Kind of provider:",
-            vec![ListOption::new(
-                0,
-                show_is_current(
-                    ProviderKind::Utxorpc,
-                    ProviderKind::Utxorpc.to_string().to_lowercase() == provider.kind(),
-                )
-                .as_str(),
-            )],
-        )
-        .prompt()
-        .into_diagnostic()?
-        .index
-        {
-            0 => ProviderKind::Utxorpc,
-            _ => bail!("Invalid kind."),
-        },
     };
 
     let new_is_default = match args.is_default {
@@ -143,56 +101,101 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     };
     let new_is_testnet = new_newtork_kind == NetworkKind::Testnet;
 
-    // Provider specific inquires.
-    let new_provider = match new_kind {
-        ProviderKind::Utxorpc => {
-            let new_url = inquire::Text::new("URL:")
-                .with_default(provider.parameters().unwrap()["url"].as_str().unwrap())
-                .prompt()
-                .into_diagnostic()?;
-            let current_headers = provider.parameters().unwrap()["headers"]
-                .as_object()
-                .map(|headers| {
-                    headers
-                        .into_iter()
-                        .map(|(key, value)| format!("{key}:{value}"))
-                        .collect::<Vec<String>>()
-                        .join(",")
-                })
-                .unwrap_or("".to_string());
-            let new_headers: HashMap<String, String> = inquire::Text::new(
-                "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
-            )
-            .with_default(&current_headers)
-            .prompt()
-            .into_diagnostic()?
-            .split(",")
-            .map(|keyval| {
-                let mut parts = keyval.split(":");
-                let key = match parts.next() {
-                    Some(s) => s,
-                    None => bail!("Invalid header."),
-                };
-                let val = match parts.next() {
-                    Some(s) => s,
-                    None => bail!("Invalid header."),
-                };
-                Ok((key.to_string(), val.to_string()))
-            })
-            .collect::<Result<_, miette::Error>>()?;
+    let new_url = inquire::Text::new("URL:")
+        .with_default(&provider.url)
+        .prompt()
+        .into_diagnostic()?;
+    let current_headers = provider
+        .headers
+        .clone()
+        .map(|headers| {
+            headers
+                .into_iter()
+                .map(|(key, value)| format!("{key}:{value}"))
+                .collect::<Vec<String>>()
+                .join(",")
+        })
+        .unwrap_or("".to_string());
 
-            Provider::UTxORPC(UTxORPCProvider {
-                name: new_name,
-                is_default: Some(new_is_default),
-                is_testnet: Some(new_is_testnet),
-                url: new_url,
-                headers: if new_headers.is_empty() {
-                    None
-                } else {
-                    Some(new_headers)
-                },
-            })
-        }
+    println!("current headers: {current_headers}");
+    let new_headers: HashMap<String, String> = inquire::Text::new(
+        "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
+    )
+    .with_default(&current_headers)
+    .prompt()
+    .into_diagnostic()?
+    .split(",")
+    .map(|keyval| {
+        let mut parts = keyval.split(":");
+        let key = match parts.next() {
+            Some(s) => s,
+            None => bail!("Invalid header."),
+        };
+        let val = match parts.next() {
+            Some(s) => s,
+            None => bail!("Invalid header."),
+        };
+        Ok((key.to_string(), val.to_string()))
+    })
+    .collect::<Result<_, miette::Error>>()?;
+
+    let new_trp_url = inquire::Text::new("TRP URL:")
+        .with_default(&provider.trp_url.clone().unwrap_or("".to_string()))
+        .prompt()
+        .into_diagnostic()?;
+
+    let current_trp_headers = provider
+        .trp_headers
+        .clone()
+        .map(|headers| {
+            headers
+                .into_iter()
+                .map(|(key, value)| format!("{key}:{value}"))
+                .collect::<Vec<String>>()
+                .join(",")
+        })
+        .unwrap_or("".to_string());
+    let new_trp_headers: HashMap<String, String> = inquire::Text::new(
+        "Add TRP request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
+    )
+    .with_default(&current_trp_headers)
+    .prompt()
+    .into_diagnostic()?
+    .split(",")
+    .map(|keyval| {
+        let mut parts = keyval.split(":");
+        let key = match parts.next() {
+            Some(s) => s,
+            None => bail!("Invalid header."),
+        };
+        let val = match parts.next() {
+            Some(s) => s,
+            None => bail!("Invalid header."),
+        };
+        Ok((key.to_string(), val.to_string()))
+    })
+    .collect::<Result<_, miette::Error>>()?;
+
+    let new_provider = Provider {
+        name: new_name,
+        is_default: Some(new_is_default),
+        is_testnet: Some(new_is_testnet),
+        url: new_url,
+        headers: if new_headers.is_empty() {
+            None
+        } else {
+            Some(new_headers)
+        },
+        trp_url: if new_trp_url.is_empty() {
+            None
+        } else {
+            Some(new_trp_url)
+        },
+        trp_headers: if new_trp_headers.is_empty() {
+            None
+        } else {
+            Some(new_trp_headers)
+        },
     };
 
     ctx.store.remove_provider(provider.clone())?;

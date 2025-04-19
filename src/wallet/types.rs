@@ -7,11 +7,16 @@ use cryptoxide::chacha20poly1305::ChaCha20Poly1305;
 use cryptoxide::kdf::argon2;
 use cryptoxide::{hmac::Hmac, pbkdf2::pbkdf2, sha2::Sha512};
 use ed25519_bip32::{self, XPrv, XPub, XPRV_SIZE};
-use miette::{Context, IntoDiagnostic};
+use miette::{bail, Context, IntoDiagnostic};
 use pallas::{
+    codec::{minicbor, utils::NonEmptySet},
     crypto::key::ed25519::{self, PublicKey, SecretKey, SecretKeyExtended, Signature},
     ledger::{
         addresses::{Address, Network, ShelleyAddress, ShelleyDelegationPart, ShelleyPaymentPart},
+        primitives::{
+            conway::{Tx, VKeyWitness},
+            Fragment,
+        },
         traverse::ComputeHash,
     },
 };
@@ -115,6 +120,40 @@ impl Wallet {
                 ShelleyDelegationPart::Null,
             )
             .into()
+        }
+    }
+
+    pub fn sign(&self, tx: Vec<u8>, password: &String) -> Result<Vec<u8>, miette::Error> {
+        let Some(encrypted) = &self.encrypted_private_key else {
+            bail!("cant sign tx with RO wallet")
+        };
+
+        let mut decoded: Tx = minicbor::decode(&tx).into_diagnostic()?;
+
+        let private_key = decrypt_private_key(password, encrypted.to_vec())?;
+        let signature = private_key.sign(decoded.transaction_body.compute_hash());
+
+        let mut vkey_witnesses = decoded
+            .transaction_witness_set
+            .vkeywitness
+            .as_ref()
+            .map(|x| x.clone().to_vec())
+            .unwrap_or_default();
+
+        let public_key = Bip32PublicKey::from_bytes(self.public_key.clone().try_into().unwrap())
+            .to_ed25519_pubkey();
+
+        vkey_witnesses.push(VKeyWitness {
+            vkey: public_key.as_ref().to_vec().into(),
+            signature: signature.as_ref().to_vec().into(),
+        });
+
+        decoded.transaction_witness_set.vkeywitness =
+            Some(NonEmptySet::from_vec(vkey_witnesses).unwrap());
+
+        match decoded.encode_fragment() {
+            Ok(tx) => Ok(tx),
+            Err(_) => bail!("failed to encode signed tx"),
         }
     }
 }

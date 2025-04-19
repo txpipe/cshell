@@ -6,7 +6,7 @@ use ratatui::crossterm::event::Event as CrosstermEvent;
 use tokio::sync::mpsc;
 use utxorpc::{CardanoSyncClient, TipEvent};
 
-use crate::{provider::types::Provider, types::DetailedBalance, wallet::types::Wallet};
+use crate::{types::DetailedBalance, wallet::types::Wallet};
 
 use super::{ChainBlock, ExplorerContext};
 
@@ -128,12 +128,6 @@ impl EventTask {
     }
 
     async fn follow_tip(&self) -> miette::Result<()> {
-        let provider = match &self.context.provider {
-            Provider::UTxORPC(provider) => provider,
-            #[allow(unreachable_patterns)]
-            _ => return Ok(()),
-        };
-
         let mut balances = HashMap::new();
         for wallet in self.context.store.wallets() {
             let key = wallet
@@ -148,7 +142,7 @@ impl EventTask {
         }
 
         loop {
-            let mut client: CardanoSyncClient = provider.client().await?;
+            let mut client: CardanoSyncClient = self.context.provider.client().await?;
             let mut tip = client.follow_tip(vec![]).await.unwrap();
 
             while let Ok(event) = tip.event().await {
