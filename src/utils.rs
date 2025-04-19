@@ -84,3 +84,38 @@ where
     }
     std::fs::write(path, contents).into_diagnostic()
 }
+
+// Helper functions for serializing Option<Vec<u8>> as hex
+pub mod option_hex_vec_u8 {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(opt_vec: &Option<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match opt_vec {
+            Some(vec) => {
+                let hex_string = hex::encode(vec);
+                serializer.serialize_str(&hex_string)
+            }
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // use serde::de::;
+
+        let opt: Option<String> = Option::deserialize(deserializer)?;
+        match opt {
+            Some(s) => {
+                let vec = hex::decode(s).map_err(D::Error::custom)?;
+                Ok(Some(vec))
+            }
+            None => Ok(None),
+        }
+    }
+}

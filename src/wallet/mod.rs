@@ -5,6 +5,7 @@ mod balance;
 mod create;
 mod delete;
 mod edit;
+mod import;
 mod info;
 mod list;
 mod restore;
@@ -24,6 +25,8 @@ enum Commands {
     Restore(restore::Args),
     /// Edit an existing wallet
     Edit(edit::Args),
+    /// Import a wallet
+    Import(import::Args),
     /// Show wallet info
     Info(info::Args),
     /// List available wallets
@@ -40,6 +43,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         Commands::Create(args) => create::run(args, ctx).await,
         Commands::Restore(args) => restore::run(args, ctx).await,
         Commands::Edit(args) => edit::run(args, ctx).await,
+        Commands::Import(args) => import::run(args, ctx).await,
         Commands::Info(args) => info::run(args, ctx).await,
         Commands::List => list::run(ctx).await,
         Commands::Delete(args) => delete::run(args, ctx).await,

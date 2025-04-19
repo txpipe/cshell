@@ -481,6 +481,7 @@ dependencies = [
  "rand_core",
  "serde",
  "serde_json",
+ "serde_with",
  "slug",
  "tokio",
  "tokio-stream",
