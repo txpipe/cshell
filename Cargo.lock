@@ -536,6 +536,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "serde_with",
  "slug",
  "strum 0.27.1",
  "tokio",

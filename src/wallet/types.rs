@@ -18,6 +18,7 @@ use pallas::{
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::str::FromStr;
 
 use crate::{output::OutputFormatter, utils, utils::Name};
 
@@ -34,8 +35,9 @@ pub struct Wallet {
     pub name: Name,
     #[serde(with = "hex::serde")]
     pub public_key: Vec<u8>,
-    #[serde(with = "hex::serde")]
-    pub encrypted_private_key: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(with = "utils::option_hex_vec_u8")]
+    pub encrypted_private_key: Option<Vec<u8>>,
     pub created: DateTime<Local>,
     pub modified: DateTime<Local>,
     pub is_default: bool,
@@ -57,7 +59,7 @@ impl Wallet {
             mnemonic.to_string(),
             Self {
                 name: Name::try_from(name)?,
-                encrypted_private_key,
+                encrypted_private_key: Some(encrypted_private_key),
                 public_key,
                 created: Local::now(),
                 modified: Local::now(),
@@ -84,7 +86,7 @@ impl Wallet {
 
         Ok(Self {
             name: Name::try_from(name)?,
-            encrypted_private_key,
+            encrypted_private_key: Some(encrypted_private_key),
             public_key,
             created: Local::now(),
             modified: Local::now(),
@@ -93,8 +95,12 @@ impl Wallet {
     }
 
     pub fn address(&self, is_testnet: bool) -> Address {
-        let pk = Bip32PublicKey::from_bytes(self.public_key.clone().try_into().unwrap())
-            .to_ed25519_pubkey();
+        let pk = match self.encrypted_private_key {
+            Some(_) => Bip32PublicKey::from_bytes(self.public_key.clone().try_into().unwrap())
+                .to_ed25519_pubkey(),
+            None => PublicKey::from_str(&hex::encode(&self.public_key)).unwrap(),
+        };
+
         if is_testnet {
             ShelleyAddress::new(
                 Network::Testnet,
