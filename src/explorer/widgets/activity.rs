@@ -51,12 +51,19 @@ impl Widget for ActivityMonitor {
     where
         Self: Sized,
     {
-        let title = match self.last_block_seen {
+        let (title, color) = match self.last_block_seen {
             Some(dt) => {
                 let seconds = (Utc::now() - dt).num_seconds();
-                format!(" Activity | Updated {} seconds ago", seconds)
+                (
+                    format!(" Activity | Updated {} seconds ago", seconds),
+                    match seconds {
+                        i64::MIN..=20 => Color::Green,
+                        21..=30 => Color::Yellow,
+                        _ => Color::Red,
+                    },
+                )
             }
-            None => " Activity ".to_string(),
+            None => (" Activity ".to_string(), Color::Green),
         };
 
         let sparkline = Sparkline::default()
@@ -66,7 +73,7 @@ impl Widget for ActivityMonitor {
                     .title(title),
             )
             .data(&self.points)
-            .style(Style::default().fg(Color::Green));
+            .style(Style::default().fg(color));
         sparkline.render(area, buf);
     }
 }

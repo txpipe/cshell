@@ -1,17 +1,24 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use comfy_table::Table;
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Line;
+use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::text::{Line, Text};
 use ratatui::widgets::{
-    Block, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, StatefulWidget, Widget,
+    Block, Cell, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, Row,
+    StatefulWidget, Table, TableState, Widget,
 };
 
 use crate::explorer::{App, ExplorerContext};
 use crate::types::DetailedBalance;
 use crate::utils::clip;
+
+#[derive(Default)]
+pub struct AccountsTabState {
+    pub list_state: ListState,
+    pub table_state: TableState,
+    pub focus_on_table: bool,
+}
 
 #[derive(Clone)]
 pub struct AccountsTab {
@@ -28,52 +35,8 @@ impl From<&App> for AccountsTab {
     }
 }
 
-pub fn balance_to_lines(balance: &DetailedBalance) -> Vec<Line> {
-    let mut lines = vec![];
-    if !balance.is_empty() {
-        lines.push(Line::from("UTxOs"));
-        lines.push(Line::from("====="));
-    } else {
-        lines.push(Line::from("No UTXOs found for this wallet"));
-    }
-    for utxo in balance {
-        lines.push(Line::from(""));
-        lines.push(Line::from(format!(
-            "* {}#{}",
-            hex::encode(&utxo.tx),
-            utxo.tx_index
-        )));
-        lines.push(format!("  * Lovelace: {}", utxo.coin).into());
-
-        if let Some(datum) = &utxo.datum {
-            lines.push(format!("  * Datum: {}", hex::encode(datum.hash.clone())).into());
-        }
-
-        if !utxo.assets.is_empty() {
-            lines.push("".into());
-            lines.push("  * Assets:".into());
-
-            let mut table = Table::new();
-            table.set_header(vec!["Policy", "Asset", "Output Coin"]);
-
-            for entry in &utxo.assets {
-                for asset in &entry.assets {
-                    table.add_row(vec![
-                        hex::encode(&entry.policy_id),
-                        hex::encode(&asset.name),
-                        asset.output_coin.clone(),
-                    ]);
-                }
-            }
-            lines.push(format!("{}", table).into());
-        }
-    }
-
-    lines
-}
-
 impl StatefulWidget for AccountsTab {
-    type State = ListState;
+    type State = AccountsTabState;
     fn render(
         self,
         area: ratatui::prelude::Rect,
@@ -84,6 +47,8 @@ impl StatefulWidget for AccountsTab {
     {
         let [accounts_area, details_area] =
             Layout::horizontal([Constraint::Length(30), Constraint::Fill(1)]).areas(area);
+        let [summary_area, utxos_area] =
+            Layout::vertical([Constraint::Length(6), Constraint::Fill(1)]).areas(details_area);
 
         let block = Block::bordered().title(Line::raw(" Accounts ").centered());
 
@@ -109,36 +74,94 @@ impl StatefulWidget for AccountsTab {
             .highlight_symbol("> ")
             .highlight_spacing(HighlightSpacing::Always);
 
-        StatefulWidget::render(list, accounts_area, buf, state);
+        StatefulWidget::render(list, accounts_area, buf, &mut state.list_state);
 
         // Handle details area:
-        if let Some(i) = state.selected() {
+        if let Some(i) = state.list_state.selected() {
             let wallet =
                 self.context.store.wallets()[i % self.context.store.wallets().len()].clone();
             let key = wallet
                 .address(self.context.provider.is_testnet())
                 .to_string();
 
+            let balance = self.balances.get(&key);
             let mut details = vec![
                 Line::styled(
                     format!("{} wallet", wallet.name),
                     (Color::White, Modifier::UNDERLINED),
                 ),
-                Line::styled(key.clone(), Color::White),
-                Line::from(""),
+                Line::styled(format!("Address: {}", &key), Color::White),
             ];
-
-            if let Some(balance) = self.balances.get(&key) {
-                details.extend(balance_to_lines(balance));
+            if let Some(balance) = balance {
+                let coin: u64 = balance
+                    .iter()
+                    .map(|utxo| utxo.coin.parse::<u64>().unwrap())
+                    .sum();
+                details.push(Line::styled(
+                    format!("Balance: {} Lovelace", coin),
+                    Color::White,
+                ));
             }
 
-            Paragraph::new(details)
+            Block::bordered()
+                .title(" Details ")
+                .padding(Padding::horizontal(1))
+                .render(details_area, buf);
+            Paragraph::new(details.clone())
                 .block(
                     Block::bordered()
                         .title(" Details ")
-                        .padding(Padding::horizontal(1)),
+                        .padding(Padding::uniform(1)),
                 )
-                .render(details_area, buf);
+                .render(summary_area, buf);
+
+            // UTXOs table
+            let Some(balance) = balance else { return };
+            let header = ["TRANSACTION", "INDEX", "COIN", "ASSETS", "DATUM"]
+                .into_iter()
+                .map(Cell::from)
+                .collect::<Row>()
+                .style(Style::default().fg(Color::Green).bold())
+                .height(1);
+
+            let rows = balance.iter().map(|utxo| {
+                Row::new(vec![
+                    format!("\n{}\n", hex::encode(&utxo.tx)),
+                    format!("\n{}\n", utxo.tx_index),
+                    format!("\n{}\n", utxo.coin),
+                    format!("\n{}\n", utxo.assets.len()),
+                    format!(
+                        "\n{}\n",
+                        match &utxo.datum {
+                            Some(datum) => clip(hex::encode(&datum.hash), 8),
+                            None => "[Empty]".to_string(),
+                        }
+                    ),
+                ])
+                .style(Style::new().fg(Color::White))
+                .height(3)
+            });
+            let bar = " █ ";
+            let table = Table::new(
+                rows,
+                [
+                    Constraint::Length(70),
+                    Constraint::Length(6),
+                    Constraint::Length(12),
+                    Constraint::Length(8),
+                    Constraint::Fill(1),
+                ],
+            )
+            .header(header)
+            .row_highlight_style(Modifier::BOLD)
+            .highlight_symbol(Text::from(vec!["".into(), bar.into(), "".into()]))
+            .highlight_spacing(HighlightSpacing::Always)
+            .block(Block::bordered().border_style(if state.focus_on_table {
+                Color::Green
+            } else {
+                Color::White
+            }));
+            StatefulWidget::render(table, utxos_area, buf, &mut state.table_state);
         } else {
             Paragraph::new("Select a wallet to show its balance")
                 .block(Block::bordered().title(" Details "))

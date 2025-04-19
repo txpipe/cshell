@@ -2,12 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use event::{AppEvent, Event, EventHandler};
 use miette::{bail, Context as _, IntoDiagnostic};
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind},
     layout::{Constraint, Layout},
-    widgets::ListState,
     DefaultTerminal, Frame,
 };
 use strum::Display;
@@ -17,8 +15,9 @@ use crate::{provider::types::Provider, store::Store, types::DetailedBalance, Con
 pub mod event;
 pub mod widgets;
 
+use event::{AppEvent, Event, EventHandler};
 use widgets::{
-    accounts_tab::AccountsTab,
+    accounts_tab::{AccountsTab, AccountsTabState},
     activity::ActivityMonitor,
     blocks_tab::{BlocksTab, BlocksTabState},
     footer::Footer,
@@ -61,7 +60,7 @@ pub struct App {
     should_show_help: bool,
     selected_tab: SelectedTab,
     chain: ChainState,
-    accounts_tab_list_state: ListState,
+    accounts_tab_state: AccountsTabState,
     blocks_tab_state: BlocksTabState,
     activity_monitor: ActivityMonitor,
     pub events: EventHandler,
@@ -116,16 +115,32 @@ impl App {
 
             if let SelectedTab::Accounts(_) = &mut self.selected_tab {
                 match key.code {
+                    KeyCode::Char('l') | KeyCode::Right => {
+                        if self.accounts_tab_state.list_state.selected().is_some() {
+                            self.accounts_tab_state.focus_on_table = true;
+                            self.accounts_tab_state.table_state.select_next();
+                        }
+                    }
+                    KeyCode::Char('h') | KeyCode::Left => {
+                        if self.accounts_tab_state.focus_on_table {
+                            self.accounts_tab_state.focus_on_table = false;
+                            self.accounts_tab_state.table_state.select(None);
+                        }
+                    }
                     KeyCode::Char('j') | KeyCode::Down => {
-                        self.accounts_tab_list_state.select_next()
+                        if self.accounts_tab_state.focus_on_table {
+                            self.accounts_tab_state.table_state.select_next()
+                        } else {
+                            self.accounts_tab_state.list_state.select_next()
+                        }
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
-                        self.accounts_tab_list_state.select_previous()
+                        if self.accounts_tab_state.focus_on_table {
+                            self.accounts_tab_state.table_state.select_previous()
+                        } else {
+                            self.accounts_tab_state.list_state.select_previous()
+                        }
                     }
-                    KeyCode::Char('g') | KeyCode::Home => {
-                        self.accounts_tab_list_state.select_first()
-                    }
-                    KeyCode::Char('G') | KeyCode::End => self.accounts_tab_list_state.select_last(),
                     _ => {}
                 }
             }
@@ -248,7 +263,7 @@ impl App {
                 frame.render_stateful_widget(
                     accounts_tab,
                     inner_area,
-                    &mut self.accounts_tab_list_state,
+                    &mut self.accounts_tab_state,
                 );
             }
             SelectedTab::Blocks(blocks_tab) => {
@@ -302,7 +317,7 @@ impl TryFrom<&Context> for App {
             should_show_help: false,
             chain: ChainState::default(),
             events: EventHandler::new(context.clone()),
-            accounts_tab_list_state: ListState::default(),
+            accounts_tab_state: AccountsTabState::default(),
             blocks_tab_state: BlocksTabState::default(),
         })
     }
