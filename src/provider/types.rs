@@ -61,6 +61,12 @@ impl Provider {
             Provider::UTxORPC(provider) => provider.get_detailed_balance(address).await,
         }
     }
+
+    pub async fn submit(&self, tx: &[u8]) -> miette::Result<Vec<u8>> {
+        match self {
+            Provider::UTxORPC(provider) => provider.submit(tx).await,
+        }
+    }
 }
 
 impl OutputFormatter for Provider {

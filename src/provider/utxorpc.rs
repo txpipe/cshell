@@ -3,8 +3,8 @@ use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utxorpc::{
-    spec::query::any_utxo_pattern::UtxoPattern, CardanoQueryClient, CardanoSyncClient,
-    ClientBuilder, InnerService,
+    spec::query::any_utxo_pattern::UtxoPattern, CardanoQueryClient, CardanoSubmitClient,
+    CardanoSyncClient, ClientBuilder, InnerService,
 };
 
 use crate::{
@@ -201,5 +201,14 @@ impl UTxORPCProvider {
                 }
             })
             .collect())
+    }
+
+    pub async fn submit(&self, tx: &[u8]) -> miette::Result<Vec<u8>> {
+        let mut client: CardanoSubmitClient = self.client().await?;
+        client
+            .submit_tx(vec![tx.to_vec()])
+            .await
+            .into_diagnostic()
+            .map(|x| x.first().unwrap().to_vec())
     }
 }
