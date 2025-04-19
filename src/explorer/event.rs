@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{FutureExt, StreamExt};
 use miette::{Context, IntoDiagnostic};
@@ -8,17 +8,19 @@ use utxorpc::{CardanoSyncClient, TipEvent};
 
 use crate::{provider::types::Provider, types::DetailedBalance, wallet::types::Wallet};
 
-use super::ExplorerContext;
+use super::{ChainBlock, ExplorerContext};
 
 #[derive(Clone, Debug)]
 pub enum Event {
     Crossterm(CrosstermEvent),
     App(AppEvent),
+    Tick,
 }
 
 #[derive(Clone, Debug)]
 pub enum AppEvent {
-    NewTip(Option<u64>),
+    Reset(u64),
+    NewTip(ChainBlock),
     BalanceUpdate((String, DetailedBalance)),
 }
 
@@ -69,9 +71,18 @@ impl EventTask {
             Ok::<_, miette::Error>(())
         };
 
+        let ticks = async || -> miette::Result<()> {
+            let tick_rate = Duration::from_secs(1);
+            let mut tick = tokio::time::interval(tick_rate);
+            loop {
+                let _ = tick.tick().await;
+                self.send(Event::Tick)?
+            }
+        };
+
         let follow_tip = async { self.follow_tip().await };
 
-        tokio::try_join!(sender, keys(), follow_tip)?;
+        tokio::try_join!(sender, keys(), follow_tip, ticks())?;
         Ok(())
     }
 
@@ -142,19 +153,43 @@ impl EventTask {
             while let Ok(event) = tip.event().await {
                 match event {
                     TipEvent::Apply(block) => {
-                        self.send(Event::App(AppEvent::NewTip(Some(
-                            block.parsed.unwrap().header.unwrap().slot,
-                        ))))?;
+                        let header = block.parsed.clone().unwrap().header.unwrap();
+                        let tx_count = match block.parsed {
+                            Some(parsed) => match parsed.body {
+                                Some(body) => body.tx.len(),
+                                None => 0,
+                            },
+                            None => 0,
+                        };
+                        let chainblock = ChainBlock {
+                            slot: header.slot,
+                            hash: header.hash.to_vec(),
+                            number: header.height,
+                            tx_count,
+                        };
+                        self.send(Event::App(AppEvent::NewTip(chainblock)))?;
                         self.check_balances(&mut balances).await?;
                     }
                     TipEvent::Undo(block) => {
-                        self.send(Event::App(AppEvent::NewTip(Some(
-                            block.parsed.unwrap().header.unwrap().slot,
-                        ))))?;
+                        let header = block.parsed.clone().unwrap().header.unwrap();
+                        let tx_count = match block.parsed {
+                            Some(parsed) => match parsed.body {
+                                Some(body) => body.tx.len(),
+                                None => 0,
+                            },
+                            None => 0,
+                        };
+                        let chainblock = ChainBlock {
+                            slot: header.slot,
+                            hash: header.hash.to_vec(),
+                            number: header.height,
+                            tx_count,
+                        };
+                        self.send(Event::App(AppEvent::NewTip(chainblock)))?;
                         self.check_balances(&mut balances).await?;
                     }
                     TipEvent::Reset(point) => {
-                        self.send(Event::App(AppEvent::NewTip(Some(point.index))))?;
+                        self.send(Event::App(AppEvent::Reset(point.index)))?;
                         self.check_balances(&mut balances).await?;
                     }
                 }
