@@ -24,6 +24,8 @@ pub struct Provider {
     pub headers: Option<HashMap<String, String>>,
     pub is_default: Option<bool>,
     pub is_testnet: Option<bool>,
+    pub trp_url: Option<String>,
+    pub trp_headers: Option<HashMap<String, String>>,
 }
 
 impl Provider {
