@@ -53,7 +53,10 @@ pub enum SelectedTab {
 }
 
 #[derive(Parser)]
-pub struct Args {}
+pub struct Args {
+    #[arg(long, help = "Name of the provider to use")]
+    provider: Option<String>,
+}
 
 pub struct App {
     done: bool,
@@ -310,25 +313,33 @@ pub struct ExplorerContext {
     pub store: Store,
     pub provider: Provider,
 }
-impl TryFrom<&Context> for ExplorerContext {
+impl TryFrom<(Args, &Context)> for ExplorerContext {
     type Error = miette::Error;
-    fn try_from(value: &Context) -> Result<Self, Self::Error> {
-        let provider = match value.store.default_provider() {
-            Some(provider) => provider,
-            None => match value.store.providers().first() {
-                Some(provider) => provider,
-                None => bail!("No providers configured"),
+    fn try_from(value: (Args, &Context)) -> Result<Self, Self::Error> {
+        let (args, ctx) = value;
+        let provider = match args.provider {
+            Some(name) => match ctx.store.find_provider(&name) {
+                Some(provider) => provider.clone(),
+                None => bail!("Provider not found."),
+            },
+            None => match ctx.store.default_provider() {
+                Some(provider) => provider.clone(),
+                None => match ctx.store.providers().first() {
+                    Some(provider) => provider.clone(),
+                    None => bail!("No providers configured"),
+                },
             },
         };
+
         Ok(Self {
-            store: value.store.clone(),
-            provider: provider.clone(),
+            store: ctx.store.clone(),
+            provider,
         })
     }
 }
-impl TryFrom<&Context> for App {
+impl TryFrom<(Args, &Context)> for App {
     type Error = miette::Error;
-    fn try_from(value: &Context) -> Result<Self, Self::Error> {
+    fn try_from(value: (Args, &Context)) -> Result<Self, Self::Error> {
         let context: Arc<ExplorerContext> = Arc::new(value.try_into()?);
         Ok(Self {
             context: context.clone(),
@@ -347,9 +358,9 @@ impl TryFrom<&Context> for App {
     }
 }
 
-pub async fn run(_args: Args, ctx: &Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &Context) -> miette::Result<()> {
     let terminal = ratatui::init();
-    let app = App::try_from(ctx)?;
+    let app = App::try_from((args, ctx))?;
     let result = app.run(terminal).await;
     ratatui::restore();
     result
