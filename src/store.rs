@@ -8,6 +8,7 @@ use crate::{
     wallet::types::Wallet,
 };
 
+#[derive(Clone)]
 pub struct Store {
     path: PathBuf,
     inner: StoreInner,
