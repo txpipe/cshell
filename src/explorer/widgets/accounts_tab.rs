@@ -147,7 +147,7 @@ impl StatefulWidget for AccountsTab {
                 [
                     Constraint::Length(70),
                     Constraint::Length(6),
-                    Constraint::Length(12),
+                    Constraint::Length(20),
                     Constraint::Length(8),
                     Constraint::Fill(1),
                 ],
