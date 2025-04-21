@@ -168,12 +168,7 @@ impl App {
         }
     }
 
-    fn handle_tick(&mut self) {
-        // self.activity_monitor.points.push_front(0);
-        // self.activity_monitor.points.pop_back();
-        self.activity_monitor.points.push_back(0);
-        self.activity_monitor.points.pop_front();
-    }
+    fn handle_tick(&mut self) {}
 
     fn handle_reset(&mut self, tip: u64) {
         self.chain.tip = Some(tip);
