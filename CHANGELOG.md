@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2025-04-22
+
+### 🐛 Bug Fixes
+
+- Activity monitor on big screens
+- Bigger space for coin amount on UTxO tab
+
+### ⚙️ Miscellaneous Tasks
+
+- Select provider using parser args
+
 ## [0.3.0] - 2025-04-21
 
 ### 🚀 Features
@@ -34,6 +45,7 @@ All notable changes to this project will be documented in this file.
 - Release cshell version 0.2.0
 - Move pallas-wallet into CShell
 - Add wallet import for RO wallets
+- Release cshell version 0.3.0
 
 ### Release
 
