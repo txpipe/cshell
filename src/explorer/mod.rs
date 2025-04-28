@@ -80,6 +80,7 @@ impl App {
                 .draw(|frame| self.draw(frame))
                 .into_diagnostic()
                 .context("rendering")?;
+
             match self.events.next().await? {
                 Event::Crossterm(event) => {
                     if let crossterm::event::Event::Key(key_event) = event {
@@ -107,7 +108,7 @@ impl App {
 
         if !self.should_show_help {
             match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => {
+                KeyCode::Char('q') => {
                     if self.should_show_help {
                         self.should_show_help = false
                     } else {
@@ -165,15 +166,7 @@ impl App {
             }
 
             if let SelectedTab::Transactions(_) = &mut self.selected_tab {
-                match key.code {
-                    KeyCode::Char('j') | KeyCode::Down => {
-                        self.transactions_tab_next_row();
-                    }
-                    KeyCode::Char('k') | KeyCode::Up => {
-                        self.transactions_tab_previous_row();
-                    }
-                    _ => {}
-                }
+                self.transactions_tab_state.handle_key(&key);
             }
         } else {
             match key.code {
@@ -200,6 +193,7 @@ impl App {
             .blocks_tab_state
             .scroll_state
             .content_length(self.chain.blocks.len() * 3 - 2);
+
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Blocks(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
             SelectedTab::Transactions(_) => {
@@ -282,40 +276,6 @@ impl App {
         };
         self.blocks_tab_state.table_state.select(Some(i));
         self.blocks_tab_state.scroll_state = self.blocks_tab_state.scroll_state.position(i * 3);
-    }
-
-    pub fn transactions_tab_next_row(&mut self) {
-        let tx_count = self.chain.blocks.iter().map(|b| b.tx_count).sum::<usize>();
-        let i = match self.transactions_tab_state.table_state.selected() {
-            Some(i) => {
-                if i >= tx_count - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.transactions_tab_state.table_state.select(Some(i));
-        self.transactions_tab_state.scroll_state =
-            self.transactions_tab_state.scroll_state.position(i * 3);
-    }
-
-    pub fn transactions_tab_previous_row(&mut self) {
-        let tx_count = self.chain.blocks.iter().map(|b| b.tx_count).sum::<usize>();
-        let i = match self.transactions_tab_state.table_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    tx_count - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.transactions_tab_state.table_state.select(Some(i));
-        self.transactions_tab_state.scroll_state =
-            self.transactions_tab_state.scroll_state.position(i * 3);
     }
 
     fn draw(&mut self, frame: &mut Frame) {

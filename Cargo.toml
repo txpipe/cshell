@@ -46,6 +46,7 @@ tx3-lang = "0.2.0"
 tx3-cardano = "0.2.0"
 url = { version = "2.5.0", features = ["serde"] }
 utxorpc = "0.10.0"
+regex = "1.11.1"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
