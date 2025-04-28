@@ -206,12 +206,10 @@ impl StatefulWidget for TransactionsTab {
 
         if !state.input.is_empty() {
             let input_regex = Regex::new(&state.input).unwrap();
-            txs = txs
-                .into_iter()
-                .filter(|tx| {
-                    input_regex.is_match(&tx.hash) || input_regex.is_match(&tx.slot.to_string())
-                })
-                .collect();
+
+            txs.retain(|tx| {
+                input_regex.is_match(&tx.hash) || input_regex.is_match(&tx.slot.to_string())
+            });
         }
 
         let rows = txs.iter().enumerate().map(|(i, tx)| {
