@@ -1,18 +1,19 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use pallas::ledger::addresses::Address;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::Text,
+    text::{Line, Span, Text},
     widgets::{
-        Block, Cell, HighlightSpacing, Paragraph, Row, Scrollbar, ScrollbarState, StatefulWidget,
-        Table, TableState, Widget,
+        Block, Cell, HighlightSpacing, Padding, Paragraph, Row, Scrollbar, ScrollbarState,
+        StatefulWidget, Table, TableState, Widget,
     },
 };
 use regex::Regex;
-use utxorpc::spec::cardano::{self, Tx};
+use utxorpc::spec::cardano::Tx;
 
 use crate::explorer::{App, ChainBlock};
 
@@ -24,6 +25,7 @@ pub struct TransactionsTabState {
     input_mode: InputMode,
     character_index: usize,
     view_mode: ViewMode,
+    tx_selected: Option<TxView>,
 }
 impl TransactionsTabState {
     pub fn handle_key(&mut self, key: &KeyEvent) {
@@ -52,7 +54,8 @@ impl TransactionsTabState {
                     }
                     (KeyCode::Enter, _) => {
                         if self.table_state.selected().is_some() {
-                            self.view_mode = ViewMode::Detail
+                            self.view_mode = ViewMode::Detail;
+                            self.tx_selected = None;
                         }
                     }
 
@@ -218,22 +221,14 @@ impl StatefulWidget for TransactionsTab {
                     .collect::<Row>()
                     .style(Style::default().fg(Color::Green).bold())
                     .height(1);
-                let mut txs: Vec<TxView> = self
-                    .blocks
-                    .borrow()
-                    .iter()
-                    .flat_map(|chain_block| {
-                        if let Some(body) = &chain_block.body {
-                            return TxView::new(chain_block.slot, body);
-                        }
-                        Default::default()
-                    })
-                    .collect();
+                let mut txs: Vec<TxView> =
+                    self.blocks.borrow().iter().flat_map(TxView::new).collect();
                 if !state.input.is_empty() {
                     let input_regex = Regex::new(&state.input).unwrap();
 
                     txs.retain(|tx| {
-                        input_regex.is_match(&tx.hash) || input_regex.is_match(&tx.slot.to_string())
+                        input_regex.is_match(&tx.hash)
+                            || input_regex.is_match(&tx.block_slot.to_string())
                     });
                 }
 
@@ -244,7 +239,7 @@ impl StatefulWidget for TransactionsTab {
                     };
                     Row::new(vec![
                         format!("\n{}\n", tx.hash),
-                        format!("\n{}\n", tx.slot),
+                        format!("\n{}\n", tx.block_slot),
                         format!("\n{}\n", tx.certs),
                         format!("\n{}\n", tx.assets),
                         format!("\n{}\n", tx.amount_ada),
@@ -282,21 +277,20 @@ impl StatefulWidget for TransactionsTab {
                 );
             }
             ViewMode::Detail => {
-                let index = state.table_state.selected().unwrap();
+                if state.tx_selected.is_none() {
+                    let index = state.table_state.selected().unwrap();
 
-                let txs: Vec<Tx> = self
-                    .blocks
-                    .borrow()
-                    .iter()
-                    .flat_map(|chain_block| {
-                        if let Some(body) = &chain_block.body {
-                            return body.tx.clone();
-                        }
-                        Default::default()
-                    })
-                    .collect();
+                    let txs: Vec<TxView> = self
+                        .blocks
+                        .borrow()
+                        .iter()
+                        .flat_map(TxView::new_with_tx)
+                        .collect();
 
-                TransactionsDetail::new(txs[index].clone()).render(area, buf)
+                    state.tx_selected = Some(txs[index].clone());
+                }
+
+                TransactionsDetail::new(state.tx_selected.clone().unwrap()).render(area, buf)
             }
         }
     }
@@ -304,11 +298,11 @@ impl StatefulWidget for TransactionsTab {
 
 #[derive(Clone)]
 pub struct TransactionsDetail {
-    tx: Tx,
+    tx_view: TxView,
 }
 impl TransactionsDetail {
-    pub fn new(tx: Tx) -> Self {
-        Self { tx }
+    pub fn new(tx_view: TxView) -> Self {
+        Self { tx_view }
     }
 }
 impl Widget for TransactionsDetail {
@@ -316,40 +310,134 @@ impl Widget for TransactionsDetail {
     where
         Self: Sized,
     {
-        let block = Block::bordered().title(" Transaction Detail | press ESC to go back ");
+        let block = Block::bordered()
+            .title(" Transaction Detail | press ESC to go back ")
+            .padding(Padding::symmetric(2, 1));
         block.clone().render(area, buf);
 
-        let inner = block.inner(area);
+        let area = block.inner(area);
 
-        Paragraph::new(hex::encode(self.tx.hash))
-            .centered()
-            .render(inner, buf);
+        let tx = self.tx_view.tx.unwrap();
+
+        let mut tx_text = vec![
+            Line::from(vec![
+                Span::styled("tx: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(hex::encode(tx.hash)),
+            ]),
+            Line::raw(""),
+        ];
+
+        let inputs = tx
+            .inputs
+            .iter()
+            .map(|i| Line::raw(format!("  {}#{}", hex::encode(&i.tx_hash), i.output_index)));
+        tx_text.extend(vec![Line::styled(
+            "inputs:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]);
+        tx_text.extend(inputs);
+
+        tx_text.extend(vec![Line::raw("")]);
+
+        let outputs = tx.outputs.iter().map(|o| {
+            let address = Address::from_bytes(&o.address)
+                .map_or("decoded fail".to_string(), |addr| addr.to_string());
+
+            Line::raw(format!(
+                "  {} - {} Lovelace - {} assets",
+                address,
+                o.coin,
+                o.assets.len()
+            ))
+        });
+        tx_text.extend(vec![Line::styled(
+            "outputs:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]);
+        tx_text.extend(outputs);
+
+        tx_text.extend(vec![Line::raw("")]);
+
+        let certs = tx.certificates.iter().map(|c| {
+            let x = serde_json::to_value(c).unwrap();
+            Line::raw(serde_json::to_string(&x).unwrap())
+        });
+        if certs.len() > 0 {
+            tx_text.extend(vec![Line::styled(
+                "certs:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]);
+            tx_text.extend(certs);
+
+            tx_text.extend(vec![Line::raw("")]);
+        }
+
+        tx_text.extend(vec![
+            Line::styled("block:", Style::default().add_modifier(Modifier::BOLD)),
+            Line::raw(format!("  slot: {}", self.tx_view.block_slot)),
+            Line::raw(format!("  hash: {}", self.tx_view.block_hash)),
+        ]);
+
+        // TODO: add scrollbar
+        Paragraph::new(Text::from(tx_text)).render(area, buf);
     }
 }
 
-struct TxView {
+#[derive(Clone)]
+pub struct TxView {
     hash: String,
-    slot: u64,
     certs: usize,
     assets: usize,
     amount_ada: u64,
     datum: bool,
+    tx: Option<Tx>,
+    block_slot: u64,
+    block_hash: String,
 }
 impl TxView {
-    pub fn new(slot: u64, body: &cardano::BlockBody) -> Vec<Self> {
-        body.tx
-            .iter()
-            .map(|tx| Self {
-                hash: hex::encode(&tx.hash),
-                slot,
-                certs: tx.certificates.len(),
-                assets: tx.outputs.iter().map(|o| o.assets.len()).sum(),
-                amount_ada: tx.outputs.iter().map(|o| o.coin).sum(),
-                datum: tx.outputs.iter().any(|o| match &o.datum {
-                    Some(datum) => !datum.hash.is_empty(),
-                    None => false,
-                }),
-            })
-            .collect()
+    pub fn new(chain_block: &ChainBlock) -> Vec<Self> {
+        match &chain_block.body {
+            Some(body) => body
+                .tx
+                .iter()
+                .map(|tx| Self {
+                    hash: hex::encode(&tx.hash),
+                    certs: tx.certificates.len(),
+                    assets: tx.outputs.iter().map(|o| o.assets.len()).sum(),
+                    amount_ada: tx.outputs.iter().map(|o| o.coin).sum(),
+                    datum: tx.outputs.iter().any(|o| match &o.datum {
+                        Some(datum) => !datum.hash.is_empty(),
+                        None => false,
+                    }),
+                    tx: None,
+                    block_slot: chain_block.slot,
+                    block_hash: hex::encode(&chain_block.hash),
+                })
+                .collect(),
+            None => Default::default(),
+        }
+    }
+
+    pub fn new_with_tx(chain_block: &ChainBlock) -> Vec<Self> {
+        match &chain_block.body {
+            Some(body) => body
+                .tx
+                .iter()
+                .map(|tx| Self {
+                    hash: hex::encode(&tx.hash),
+                    certs: tx.certificates.len(),
+                    assets: tx.outputs.iter().map(|o| o.assets.len()).sum(),
+                    amount_ada: tx.outputs.iter().map(|o| o.coin).sum(),
+                    datum: tx.outputs.iter().any(|o| match &o.datum {
+                        Some(datum) => !datum.hash.is_empty(),
+                        None => false,
+                    }),
+                    tx: Some(tx.clone()),
+                    block_slot: chain_block.slot,
+                    block_hash: hex::encode(&chain_block.hash),
+                })
+                .collect(),
+            None => Default::default(),
+        }
     }
 }
