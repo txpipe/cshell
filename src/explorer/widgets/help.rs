@@ -25,7 +25,7 @@ impl Widget for HelpPopup {
         let help = Paragraph::new(vec![
             Line::from(""),
             Line::from("Tab | shift + Tab: Scroll through tabs"),
-            Line::from("q | Esc : Quit CShell"),
+            Line::from("q : Quit CShell"),
             Line::from("? : Show this help"),
         ])
         .style((Color::Black, Modifier::BOLD))

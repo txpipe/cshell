@@ -1,4 +1,6 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Margin, Rect},
@@ -10,7 +12,7 @@ use ratatui::{
     },
 };
 use regex::Regex;
-use utxorpc::spec::cardano;
+use utxorpc::spec::cardano::{self, Tx};
 
 use crate::explorer::{App, ChainBlock};
 
@@ -21,37 +23,107 @@ pub struct TransactionsTabState {
     input: String,
     input_mode: InputMode,
     character_index: usize,
+    view_mode: ViewMode,
 }
 impl TransactionsTabState {
-    fn byte_index(&self) -> usize {
-        self.input
+    pub fn handle_key(&mut self, key: &KeyEvent) {
+        match self.view_mode {
+            ViewMode::Normal => match self.input_mode {
+                InputMode::Normal => match (key.code, key.modifiers) {
+                    (KeyCode::Char('J') | KeyCode::Down, KeyModifiers::SHIFT) => {
+                        self.last_row();
+                    }
+                    (KeyCode::Char('j') | KeyCode::Down, _) => {
+                        self.next_row();
+                    }
+                    (KeyCode::Char('K') | KeyCode::Up, KeyModifiers::SHIFT) => {
+                        self.first_row();
+                    }
+                    (KeyCode::Char('k') | KeyCode::Up, _) => {
+                        self.previous_row();
+                    }
+                    (KeyCode::Char('f') | KeyCode::Char('/'), _) => {
+                        self.input_mode = InputMode::Editing
+                    }
+                    (KeyCode::Esc, _) => {
+                        if !self.input.is_empty() {
+                            self.input.clear()
+                        }
+                    }
+                    (KeyCode::Enter, _) => {
+                        if self.table_state.selected().is_some() {
+                            self.view_mode = ViewMode::Detail
+                        }
+                    }
+
+                    _ => {}
+                },
+                InputMode::Editing => match key.code {
+                    KeyCode::Char(to_insert) => self.search_enter_char(to_insert),
+                    KeyCode::Esc => self.input_mode = InputMode::Normal,
+                    KeyCode::Backspace => self.search_delete_char(),
+                    KeyCode::Enter => {
+                        if !self.input.is_empty() {
+                            self.table_state.select_first();
+                        }
+
+                        self.input_mode = InputMode::Normal
+                    }
+
+                    _ => {}
+                },
+            },
+            #[allow(clippy::single_match)]
+            ViewMode::Detail => match key.code {
+                KeyCode::Esc => self.view_mode = ViewMode::Normal,
+                _ => {}
+            },
+        }
+    }
+
+    pub fn update_scroll_state(&mut self, len: usize) {
+        self.scroll_state = self.scroll_state.content_length(len * 3 - 2)
+    }
+
+    fn next_row(&mut self) {
+        let i = self.table_state.selected().map(|i| i + 1).unwrap_or(0);
+        self.table_state.select(Some(i));
+        self.scroll_state = self.scroll_state.position(i * 3);
+    }
+
+    fn previous_row(&mut self) {
+        let i = self.table_state.selected().unwrap_or(0).saturating_sub(1);
+        self.table_state.select(Some(i));
+        self.scroll_state = self.scroll_state.position(i * 3);
+    }
+
+    fn first_row(&mut self) {
+        self.table_state.select_first();
+        if let Some(i) = self.table_state.selected() {
+            self.scroll_state = self.scroll_state.position(i * 3);
+        }
+    }
+
+    fn last_row(&mut self) {
+        self.table_state.select_last();
+        if let Some(i) = self.table_state.selected() {
+            self.scroll_state = self.scroll_state.position(i);
+        }
+    }
+
+    fn search_enter_char(&mut self, new_char: char) {
+        let index = self
+            .input
             .char_indices()
             .map(|(i, _)| i)
             .nth(self.character_index)
-            .unwrap_or(self.input.len())
-    }
+            .unwrap_or(self.input.len());
 
-    pub fn enter_char(&mut self, new_char: char) {
-        let index = self.byte_index();
         self.input.insert(index, new_char);
-        self.move_cursor_right();
+        self.search_move_cursor_right();
     }
 
-    pub fn move_cursor_left(&mut self) {
-        let cursor_moved_left = self.character_index.saturating_sub(1);
-        self.character_index = self.clamp_cursor(cursor_moved_left);
-    }
-
-    pub fn move_cursor_right(&mut self) {
-        let cursor_moved_right = self.character_index.saturating_add(1);
-        self.character_index = self.clamp_cursor(cursor_moved_right);
-    }
-
-    fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.input.chars().count())
-    }
-
-    pub fn delete_char(&mut self) {
+    fn search_delete_char(&mut self) {
         let is_not_cursor_leftmost = self.character_index != 0;
         if is_not_cursor_leftmost {
             let current_index = self.character_index;
@@ -61,76 +133,197 @@ impl TransactionsTabState {
             let after_char_to_delete = self.input.chars().skip(current_index);
 
             self.input = before_char_to_delete.chain(after_char_to_delete).collect();
-            self.move_cursor_left();
+            self.search_move_cursor_left();
         }
     }
 
-    pub fn next_row(&mut self) {
-        let i = match self.table_state.selected() {
-            Some(i) => i + 1,
-            None => 0,
-        };
-
-        self.table_state.select(Some(i));
-        self.scroll_state = self.scroll_state.position(i * 3);
+    fn search_move_cursor_left(&mut self) {
+        let cursor_moved_left = self.character_index.saturating_sub(1);
+        self.character_index = self.search_clamp_cursor(cursor_moved_left);
     }
 
-    pub fn previous_row(&mut self) {
-        let i = match self.table_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    0
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.table_state.select(Some(i));
-        self.scroll_state = self.scroll_state.position(i * 3);
+    fn search_move_cursor_right(&mut self) {
+        let cursor_moved_right = self.character_index.saturating_add(1);
+        self.character_index = self.search_clamp_cursor(cursor_moved_right);
     }
 
-    pub fn handle_key(&mut self, key: &KeyEvent) {
-        match self.input_mode {
-            InputMode::Normal => match key.code {
-                KeyCode::Char('j') | KeyCode::Down => {
-                    self.next_row();
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    self.previous_row();
-                }
-                KeyCode::Char('e') => self.input_mode = InputMode::Editing,
-                _ => {}
-            },
-            InputMode::Editing => match key.code {
-                KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                KeyCode::Left => self.move_cursor_left(),
-                KeyCode::Right => self.move_cursor_right(),
-                KeyCode::Esc => self.input_mode = InputMode::Normal,
-                KeyCode::Backspace => self.delete_char(),
-                _ => {}
-            },
-        }
+    fn search_clamp_cursor(&self, new_cursor_pos: usize) -> usize {
+        new_cursor_pos.clamp(0, self.input.chars().count())
     }
 }
 
 #[derive(Clone)]
 pub struct TransactionsTab {
-    pub blocks: Vec<ChainBlock>,
+    blocks: Rc<RefCell<VecDeque<ChainBlock>>>,
+}
+impl From<&App> for TransactionsTab {
+    fn from(value: &App) -> Self {
+        Self {
+            blocks: Rc::clone(&value.chain.blocks),
+        }
+    }
 }
 
-#[derive(Clone, Default, PartialEq, Eq)]
-pub enum InputMode {
+#[derive(Clone, Default, PartialEq)]
+enum InputMode {
     #[default]
     Normal,
     Editing,
 }
 
-impl From<&App> for TransactionsTab {
-    fn from(value: &App) -> Self {
-        Self {
-            blocks: value.chain.blocks.clone(),
+#[derive(Clone, Default)]
+enum ViewMode {
+    #[default]
+    Normal,
+    Detail,
+}
+
+impl StatefulWidget for TransactionsTab {
+    type State = TransactionsTabState;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State)
+    where
+        Self: Sized,
+    {
+        match state.view_mode {
+            ViewMode::Normal => {
+                let block = Block::bordered().title(" Transactions ");
+                block.clone().render(area, buf);
+                let area = block.inner(area);
+
+                let [search_area, txs_area] =
+                    Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(area);
+
+                let input = match state.input_mode {
+                    InputMode::Normal => Paragraph::new(state.input.as_str())
+                        .style(Style::default().fg(Color::DarkGray))
+                        .block(
+                            Block::bordered()
+                                .title(" Search | press f to filter ")
+                                .border_style(Style::new().dark_gray()),
+                        ),
+                    InputMode::Editing => Paragraph::new(state.input.as_str())
+                        .style(Style::default().fg(Color::White))
+                        .block(
+                            Block::bordered()
+                                .title(" Search | press ESC to leave ")
+                                .border_style(Style::new().white()),
+                        ),
+                };
+                input.render(search_area, buf);
+
+                let header = ["Hash", "Slot", "Certs", "Assets", "Total coin", "Datum"]
+                    .into_iter()
+                    .map(Cell::from)
+                    .collect::<Row>()
+                    .style(Style::default().fg(Color::Green).bold())
+                    .height(1);
+                let mut txs: Vec<TxView> = self
+                    .blocks
+                    .borrow()
+                    .iter()
+                    .flat_map(|chain_block| {
+                        if let Some(body) = &chain_block.body {
+                            return TxView::new(chain_block.slot, body);
+                        }
+                        Default::default()
+                    })
+                    .collect();
+                if !state.input.is_empty() {
+                    let input_regex = Regex::new(&state.input).unwrap();
+
+                    txs.retain(|tx| {
+                        input_regex.is_match(&tx.hash) || input_regex.is_match(&tx.slot.to_string())
+                    });
+                }
+
+                let rows = txs.iter().enumerate().map(|(i, tx)| {
+                    let color = match i % 2 {
+                        0 => Color::Black,
+                        _ => Color::Reset,
+                    };
+                    Row::new(vec![
+                        format!("\n{}\n", tx.hash),
+                        format!("\n{}\n", tx.slot),
+                        format!("\n{}\n", tx.certs),
+                        format!("\n{}\n", tx.assets),
+                        format!("\n{}\n", tx.amount_ada),
+                        format!("\n{}\n", if tx.datum { "yes" } else { "no" }),
+                    ])
+                    .style(Style::new().fg(Color::White).bg(color))
+                    .height(3)
+                });
+                let bar = " █ ";
+                let table = Table::new(
+                    rows,
+                    [
+                        Constraint::Fill(1),
+                        Constraint::Length(12),
+                        Constraint::Length(12),
+                        Constraint::Length(12),
+                        Constraint::Length(12),
+                        Constraint::Length(12),
+                    ],
+                )
+                .header(header)
+                .row_highlight_style(Modifier::BOLD)
+                .highlight_symbol(Text::from(vec!["".into(), bar.into(), "".into()]))
+                .highlight_spacing(HighlightSpacing::Always);
+
+                StatefulWidget::render(table, txs_area, buf, &mut state.table_state);
+                StatefulWidget::render(
+                    Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight),
+                    txs_area.inner(Margin {
+                        vertical: 1,
+                        horizontal: 0,
+                    }),
+                    buf,
+                    &mut state.scroll_state,
+                );
+            }
+            ViewMode::Detail => {
+                let index = state.table_state.selected().unwrap();
+
+                let txs: Vec<Tx> = self
+                    .blocks
+                    .borrow()
+                    .iter()
+                    .flat_map(|chain_block| {
+                        if let Some(body) = &chain_block.body {
+                            return body.tx.clone();
+                        }
+                        Default::default()
+                    })
+                    .collect();
+
+                TransactionsDetail::new(txs[index].clone()).render(area, buf)
+            }
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct TransactionsDetail {
+    tx: Tx,
+}
+impl TransactionsDetail {
+    pub fn new(tx: Tx) -> Self {
+        Self { tx }
+    }
+}
+impl Widget for TransactionsDetail {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        let block = Block::bordered().title(" Transaction Detail | press ESC to go back ");
+        block.clone().render(area, buf);
+
+        let inner = block.inner(area);
+
+        Paragraph::new(hex::encode(self.tx.hash))
+            .centered()
+            .render(inner, buf);
     }
 }
 
@@ -158,103 +351,5 @@ impl TxView {
                 }),
             })
             .collect()
-    }
-}
-
-impl StatefulWidget for TransactionsTab {
-    type State = TransactionsTabState;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State)
-    where
-        Self: Sized,
-    {
-        let [search_area, txs_area] =
-            Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(area);
-
-        let input = Paragraph::new(state.input.as_str())
-            .style(match state.input_mode {
-                InputMode::Normal => Style::default(),
-                InputMode::Editing => Style::default().fg(Color::White),
-            })
-            .block(
-                Block::bordered()
-                    .title(" Search ")
-                    .border_style(match state.input_mode {
-                        InputMode::Normal => Style::new().dark_gray(),
-                        InputMode::Editing => Style::new().white(),
-                    }),
-            );
-
-        input.render(search_area, buf);
-
-        let header = ["Hash", "Slot", "Certs", "Assets", "Total Coin", "Datum"]
-            .into_iter()
-            .map(Cell::from)
-            .collect::<Row>()
-            .style(Style::default().fg(Color::Green).bold())
-            .height(1);
-        let mut txs: Vec<TxView> = self
-            .blocks
-            .iter()
-            .flat_map(|chain_block| {
-                if let Some(body) = &chain_block.body {
-                    return TxView::new(chain_block.slot, body);
-                }
-                Default::default()
-            })
-            .collect();
-
-        if !state.input.is_empty() {
-            let input_regex = Regex::new(&state.input).unwrap();
-
-            txs.retain(|tx| {
-                input_regex.is_match(&tx.hash) || input_regex.is_match(&tx.slot.to_string())
-            });
-        }
-
-        let rows = txs.iter().enumerate().map(|(i, tx)| {
-            let color = match i % 2 {
-                0 => Color::Black,
-                _ => Color::Reset,
-            };
-            Row::new(vec![
-                format!("\n{}\n", tx.hash),
-                format!("\n{}\n", tx.slot),
-                format!("\n{}\n", tx.certs),
-                format!("\n{}\n", tx.assets),
-                format!("\n{}\n", tx.amount_ada),
-                format!("\n{}\n", if tx.datum { "yes" } else { "no" }),
-            ])
-            .style(Style::new().fg(Color::White).bg(color))
-            .height(3)
-        });
-        let bar = " █ ";
-        let table = Table::new(
-            rows,
-            [
-                Constraint::Fill(1),
-                Constraint::Length(12),
-                Constraint::Length(12),
-                Constraint::Length(12),
-                Constraint::Length(12),
-                Constraint::Length(12),
-            ],
-        )
-        .header(header)
-        .row_highlight_style(Modifier::BOLD)
-        .highlight_symbol(Text::from(vec!["".into(), bar.into(), "".into()]))
-        .highlight_spacing(HighlightSpacing::Always)
-        .block(Block::bordered());
-
-        StatefulWidget::render(table, txs_area, buf, &mut state.table_state);
-        StatefulWidget::render(
-            Scrollbar::new(ratatui::widgets::ScrollbarOrientation::VerticalRight),
-            txs_area.inner(Margin {
-                vertical: 1,
-                horizontal: 1,
-            }),
-            buf,
-            &mut state.scroll_state,
-        );
     }
 }
