@@ -9,11 +9,11 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{
         Block, Cell, HighlightSpacing, Padding, Paragraph, Row, Scrollbar, ScrollbarState,
-        StatefulWidget, Table, TableState, Widget,
+        StatefulWidget, Table, TableState, Widget, Wrap,
     },
 };
 use regex::Regex;
-use utxorpc::spec::cardano::Tx;
+use utxorpc::spec::cardano::{self, certificate::Certificate, stake_credential, Tx};
 
 use crate::explorer::{App, ChainBlock};
 
@@ -26,24 +26,17 @@ pub struct TransactionsTabState {
     character_index: usize,
     view_mode: ViewMode,
     tx_selected: Option<TxView>,
+    detail_state: TransactionsDetailState,
 }
 impl TransactionsTabState {
     pub fn handle_key(&mut self, key: &KeyEvent) {
         match self.view_mode {
             ViewMode::Normal => match self.input_mode {
                 InputMode::Normal => match (key.code, key.modifiers) {
-                    (KeyCode::Char('J') | KeyCode::Down, KeyModifiers::SHIFT) => {
-                        self.last_row();
-                    }
-                    (KeyCode::Char('j') | KeyCode::Down, _) => {
-                        self.next_row();
-                    }
-                    (KeyCode::Char('K') | KeyCode::Up, KeyModifiers::SHIFT) => {
-                        self.first_row();
-                    }
-                    (KeyCode::Char('k') | KeyCode::Up, _) => {
-                        self.previous_row();
-                    }
+                    (KeyCode::Char('J') | KeyCode::Down, KeyModifiers::SHIFT) => self.last_row(),
+                    (KeyCode::Char('j') | KeyCode::Down, _) => self.next_row(),
+                    (KeyCode::Char('K') | KeyCode::Up, KeyModifiers::SHIFT) => self.first_row(),
+                    (KeyCode::Char('k') | KeyCode::Up, _) => self.previous_row(),
                     (KeyCode::Char('f') | KeyCode::Char('/'), _) => {
                         self.input_mode = InputMode::Editing
                     }
@@ -56,9 +49,9 @@ impl TransactionsTabState {
                         if self.table_state.selected().is_some() {
                             self.view_mode = ViewMode::Detail;
                             self.tx_selected = None;
+                            self.detail_state.vertical_offset = 0;
                         }
                     }
-
                     _ => {}
                 },
                 InputMode::Editing => match key.code {
@@ -69,7 +62,6 @@ impl TransactionsTabState {
                         if !self.input.is_empty() {
                             self.table_state.select_first();
                         }
-
                         self.input_mode = InputMode::Normal
                     }
 
@@ -79,13 +71,17 @@ impl TransactionsTabState {
             #[allow(clippy::single_match)]
             ViewMode::Detail => match key.code {
                 KeyCode::Esc => self.view_mode = ViewMode::Normal,
-                _ => {}
+                _ => self.detail_state.handle_key(key),
             },
         }
     }
 
     pub fn update_scroll_state(&mut self, len: usize) {
-        self.scroll_state = self.scroll_state.content_length(len * 3 - 2)
+        self.scroll_state = self.scroll_state.content_length(
+            len.checked_mul(3)
+                .and_then(|v| v.checked_sub(2))
+                .unwrap_or(0),
+        )
     }
 
     fn next_row(&mut self) {
@@ -290,9 +286,35 @@ impl StatefulWidget for TransactionsTab {
                     state.tx_selected = Some(txs[index].clone());
                 }
 
-                TransactionsDetail::new(state.tx_selected.clone().unwrap()).render(area, buf)
+                TransactionsDetail::new(state.tx_selected.clone().unwrap()).render(
+                    area,
+                    buf,
+                    &mut state.detail_state,
+                )
             }
         }
+    }
+}
+
+#[derive(Default)]
+pub struct TransactionsDetailState {
+    vertical_offset: u16,
+}
+impl TransactionsDetailState {
+    pub fn handle_key(&mut self, key: &KeyEvent) {
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => self.up(),
+            KeyCode::Char('k') | KeyCode::Up => self.down(),
+            _ => {}
+        };
+    }
+
+    fn down(&mut self) {
+        self.vertical_offset = self.vertical_offset.saturating_sub(1);
+    }
+
+    fn up(&mut self) {
+        self.vertical_offset += 1;
     }
 }
 
@@ -305,11 +327,10 @@ impl TransactionsDetail {
         Self { tx_view }
     }
 }
-impl Widget for TransactionsDetail {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
+impl StatefulWidget for TransactionsDetail {
+    type State = TransactionsDetailState;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let block = Block::bordered()
             .title(" Transaction Detail | press ESC to go back ")
             .padding(Padding::symmetric(2, 1));
@@ -324,52 +345,171 @@ impl Widget for TransactionsDetail {
                 Span::styled("tx: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(hex::encode(tx.hash)),
             ]),
-            Line::raw(""),
+            Line::default(),
         ];
 
         let inputs = tx
             .inputs
             .iter()
             .map(|i| Line::raw(format!("  {}#{}", hex::encode(&i.tx_hash), i.output_index)));
-        tx_text.extend(vec![Line::styled(
+        tx_text.push(Line::styled(
             "inputs:",
             Style::default().add_modifier(Modifier::BOLD),
-        )]);
+        ));
         tx_text.extend(inputs);
+        tx_text.push(Line::default());
 
-        tx_text.extend(vec![Line::raw("")]);
-
-        let outputs = tx.outputs.iter().map(|o| {
+        let outputs = tx.outputs.iter().flat_map(|o| {
             let address = Address::from_bytes(&o.address)
                 .map_or("decoded fail".to_string(), |addr| addr.to_string());
 
-            Line::raw(format!(
-                "  {} - {} Lovelace - {} assets",
+            let mut lines = vec![Line::raw(format!(
+                "  {} - {} lovelace - {} assets",
                 address,
                 o.coin,
                 o.assets.len()
-            ))
+            ))];
+
+            if let Some(datum) = &o.datum {
+                if !datum.hash.is_empty() {
+                    lines.extend(vec![
+                        Line::raw("    datum hash:"),
+                        Line::raw(format!("      {}", hex::encode(&datum.hash))),
+                    ]);
+                }
+                if let Some(payload) = &datum.payload {
+                    let value = serde_json::to_value(payload).unwrap();
+                    lines.extend(vec![
+                        Line::raw("    datum payload:"),
+                        Line::raw(format!("      {value}")),
+                        Line::default(),
+                    ]);
+                }
+            }
+            lines
         });
-        tx_text.extend(vec![Line::styled(
+
+        tx_text.push(Line::styled(
             "outputs:",
             Style::default().add_modifier(Modifier::BOLD),
-        )]);
+        ));
         tx_text.extend(outputs);
+        tx_text.push(Line::default());
 
-        tx_text.extend(vec![Line::raw("")]);
+        let reference_inputs = tx
+            .reference_inputs
+            .iter()
+            .map(|i| Line::raw(format!("  {}#{}", hex::encode(&i.tx_hash), i.output_index)))
+            .collect::<Vec<Line>>();
+        if !reference_inputs.is_empty() {
+            tx_text.push(Line::styled(
+                "reference inputs:",
+                Style::default().add_modifier(Modifier::BOLD),
+            ));
+            tx_text.extend(reference_inputs);
+            tx_text.push(Line::default());
+        }
 
-        let certs = tx.certificates.iter().map(|c| {
-            let x = serde_json::to_value(c).unwrap();
-            Line::raw(serde_json::to_string(&x).unwrap())
-        });
-        if certs.len() > 0 {
-            tx_text.extend(vec![Line::styled(
+        let mints = tx
+            .mint
+            .iter()
+            .flat_map(|i| {
+                let mut lines = vec![Line::raw(format!(
+                    "  Policy Id: {}",
+                    hex::encode(&i.policy_id)
+                ))];
+                lines.extend(i.assets.iter().flat_map(|a| {
+                    vec![
+                        Line::raw(format!("    Asset Name: {}", hex::encode(&a.name))),
+                        Line::raw(format!("    Mint Coin: {}", a.mint_coin)),
+                        Line::raw(format!("    Output Coin: {}", a.output_coin)),
+                    ]
+                }));
+                lines
+            })
+            .collect::<Vec<Line>>();
+        if !mints.is_empty() {
+            tx_text.push(Line::styled(
+                "mints:",
+                Style::default().add_modifier(Modifier::BOLD),
+            ));
+            tx_text.extend(mints);
+            tx_text.extend(vec![Line::default()]);
+        }
+
+        if let Some(collateral) = tx.collateral {
+            if collateral.total_collateral > 0 {
+                tx_text.extend(vec![
+                    Line::styled("collateral:", Style::default().add_modifier(Modifier::BOLD)),
+                    Line::raw(format!(
+                        "  amount: {} lovelace",
+                        collateral.total_collateral
+                    )),
+                    Line::default(),
+                ]);
+            }
+        }
+
+        let certs = tx
+            .certificates
+            .iter()
+            .flat_map(|c| {
+                let value = serde_json::to_value(c).unwrap();
+
+                if let Some(certificate) = &c.certificate {
+                    return match certificate {
+                        Certificate::StakeRegistration(v) => {
+                            let mut lines = vec![Line::raw("  Stake Registration")];
+                            lines.extend(map_cert_stake_credential(v));
+                            lines
+                        }
+                        Certificate::StakeDeregistration(v) => {
+                            let mut lines = vec![Line::raw("  Vote Deregistration")];
+                            lines.extend(map_cert_stake_credential(v));
+                            lines
+                        }
+                        Certificate::StakeDelegation(v) => {
+                            let mut lines = vec![
+                                Line::raw("  Stake Delegation"),
+                                Line::raw(format!(
+                                    "    Pool Key Hash: {}",
+                                    hex::encode(&v.pool_keyhash)
+                                )),
+                            ];
+                            if let Some(v) = &v.stake_credential {
+                                lines.extend(map_cert_stake_credential(v));
+                            }
+                            lines
+                        }
+                        Certificate::VoteDelegCert(v) => {
+                            let mut lines = vec![Line::raw("  Vote Delegation")];
+                            if let Some(v) = &v.stake_credential {
+                                lines.extend(map_cert_stake_credential(v));
+                            }
+                            lines
+                        }
+                        _ => vec![Line::raw(serde_json::to_string(&value).unwrap())],
+                    };
+                }
+
+                if let Some(redeemer) = &c.redeemer {
+                    let value = serde_json::to_value(redeemer).unwrap();
+                    return vec![
+                        Line::raw("  Redeemer"),
+                        Line::raw(serde_json::to_string(&value).unwrap()),
+                    ];
+                }
+
+                Vec::default()
+            })
+            .collect::<Vec<Line>>();
+        if !certs.is_empty() {
+            tx_text.push(Line::styled(
                 "certs:",
                 Style::default().add_modifier(Modifier::BOLD),
-            )]);
+            ));
             tx_text.extend(certs);
-
-            tx_text.extend(vec![Line::raw("")]);
+            tx_text.extend(vec![Line::default()]);
         }
 
         tx_text.extend(vec![
@@ -378,8 +518,11 @@ impl Widget for TransactionsDetail {
             Line::raw(format!("  hash: {}", self.tx_view.block_hash)),
         ]);
 
-        // TODO: add scrollbar
-        Paragraph::new(Text::from(tx_text)).render(area, buf);
+        let paragraph = Paragraph::new(Text::from(tx_text))
+            .wrap(Wrap { trim: false })
+            .scroll((state.vertical_offset, 0));
+
+        paragraph.render(area, buf);
     }
 }
 
@@ -439,5 +582,23 @@ impl TxView {
                 .collect(),
             None => Default::default(),
         }
+    }
+}
+
+fn map_cert_stake_credential(v: &cardano::StakeCredential) -> Vec<Line<'_>> {
+    if let Some(stake_credential) = &v.stake_credential {
+        vec![
+            match stake_credential {
+                stake_credential::StakeCredential::AddrKeyHash(addr_key_hash) => {
+                    Line::raw(format!("    Key Hash: {}", hex::encode(addr_key_hash)))
+                }
+                stake_credential::StakeCredential::ScriptHash(script_hash) => {
+                    Line::raw(format!("    Script Hash: {}", hex::encode(script_hash)))
+                }
+            },
+            Line::default(),
+        ]
+    } else {
+        Vec::default()
     }
 }
