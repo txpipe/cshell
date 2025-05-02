@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2025-05-02
+
+### 🚀 Features
+
+- Implement txs view (#9)
+
+### ⚙️ Miscellaneous Tasks
+
+- Update Pallas and Tx3 deps (#10)
+
 ## [0.3.1] - 2025-04-22
 
 ### 🐛 Bug Fixes
@@ -12,6 +22,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Select provider using parser args
+- Release cshell version 0.3.1
 
 ## [0.3.0] - 2025-04-21
 
