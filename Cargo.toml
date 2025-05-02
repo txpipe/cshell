@@ -27,7 +27,7 @@ hex = { version = "0.4.3", features = ["serde"] }
 inquire = "0.7.4"
 jsonrpsee = { version = "0", features = ["client"] }
 miette = { version = "7.2.0", features = ["fancy"] }
-pallas = { version = "1.0.0-alpha.1", features = ["hardano"] }
+pallas = { version = "1.0.0-alpha.2", features = ["hardano"] }
 prost = "0.13.5"
 rand = "0.8.5"
 rand_core = { version = "0.6.4" }
@@ -42,8 +42,8 @@ tokio-stream = "0.1.17"
 toml = "0.8.20"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-tx3-lang = "0.2.0"
-tx3-cardano = "0.2.0"
+tx3-lang = "0.3.0"
+tx3-cardano = "0.3.0"
 url = { version = "2.5.0", features = ["serde"] }
 utxorpc = "0.10.0"
 regex = "1.11.1"
