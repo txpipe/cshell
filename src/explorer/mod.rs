@@ -1,4 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    rc::Rc,
+    sync::Arc,
+};
 
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -9,6 +14,7 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 use strum::Display;
+use utxorpc::spec::cardano::BlockBody;
 
 use crate::{provider::types::Provider, store::Store, types::DetailedBalance, Context};
 
@@ -23,14 +29,15 @@ use widgets::{
     footer::Footer,
     header::Header,
     help::HelpPopup,
-    transactions_tab::TransactionsTab,
+    transactions_tab::{TransactionsTab, TransactionsTabState},
 };
 
 #[derive(Default)]
 pub struct ChainState {
     pub tip: Option<u64>,
     pub balances: HashMap<String, DetailedBalance>,
-    pub blocks: Vec<ChainBlock>,
+    // TODO: add a capacity to not have problems with memory
+    pub blocks: Rc<RefCell<VecDeque<ChainBlock>>>,
     pub last_block_seen: Option<DateTime<Utc>>,
 }
 
@@ -40,6 +47,7 @@ pub struct ChainBlock {
     pub hash: Vec<u8>,
     pub number: u64,
     pub tx_count: usize,
+    pub body: Option<BlockBody>,
 }
 
 #[derive(Clone, Display)]
@@ -65,6 +73,7 @@ pub struct App {
     chain: ChainState,
     accounts_tab_state: AccountsTabState,
     blocks_tab_state: BlocksTabState,
+    transactions_tab_state: TransactionsTabState,
     activity_monitor: ActivityMonitor,
     pub events: EventHandler,
     pub context: Arc<ExplorerContext>,
@@ -77,6 +86,7 @@ impl App {
                 .draw(|frame| self.draw(frame))
                 .into_diagnostic()
                 .context("rendering")?;
+
             match self.events.next().await? {
                 Event::Crossterm(event) => {
                     if let crossterm::event::Event::Key(key_event) = event {
@@ -104,7 +114,7 @@ impl App {
 
         if !self.should_show_help {
             match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => {
+                KeyCode::Char('q') => {
                     if self.should_show_help {
                         self.should_show_help = false
                     } else {
@@ -117,48 +127,10 @@ impl App {
                 _ => {}
             }
 
-            if let SelectedTab::Accounts(_) = &mut self.selected_tab {
-                match key.code {
-                    KeyCode::Char('l') | KeyCode::Right => {
-                        if self.accounts_tab_state.list_state.selected().is_some() {
-                            self.accounts_tab_state.focus_on_table = true;
-                            self.accounts_tab_state.table_state.select_next();
-                        }
-                    }
-                    KeyCode::Char('h') | KeyCode::Left => {
-                        if self.accounts_tab_state.focus_on_table {
-                            self.accounts_tab_state.focus_on_table = false;
-                            self.accounts_tab_state.table_state.select(None);
-                        }
-                    }
-                    KeyCode::Char('j') | KeyCode::Down => {
-                        if self.accounts_tab_state.focus_on_table {
-                            self.accounts_tab_state.table_state.select_next()
-                        } else {
-                            self.accounts_tab_state.list_state.select_next()
-                        }
-                    }
-                    KeyCode::Char('k') | KeyCode::Up => {
-                        if self.accounts_tab_state.focus_on_table {
-                            self.accounts_tab_state.table_state.select_previous()
-                        } else {
-                            self.accounts_tab_state.list_state.select_previous()
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            if let SelectedTab::Blocks(_) = &mut self.selected_tab {
-                match key.code {
-                    KeyCode::Char('j') | KeyCode::Down => {
-                        self.blocks_tab_next_row();
-                    }
-                    KeyCode::Char('k') | KeyCode::Up => {
-                        self.blocks_tab_previous_row();
-                    }
-                    _ => {}
-                }
+            match self.selected_tab {
+                SelectedTab::Accounts(_) => self.accounts_tab_state.handle_key(&key),
+                SelectedTab::Blocks(_) => self.blocks_tab_state.handle_key(&key),
+                SelectedTab::Transactions(_) => self.transactions_tab_state.handle_key(&key),
             }
         } else {
             match key.code {
@@ -179,14 +151,21 @@ impl App {
     fn handle_new_tip(&mut self, tip: ChainBlock) {
         self.chain.tip = Some(tip.slot);
         self.chain.last_block_seen = Some(Utc::now());
-        self.chain.blocks.push(tip);
+        self.chain.blocks.borrow_mut().push_front(tip);
+
         self.activity_monitor = ActivityMonitor::from(&*self);
-        self.blocks_tab_state.scroll_state = self
-            .blocks_tab_state
-            .scroll_state
-            .content_length(self.chain.blocks.len() * 3 - 2);
+
+        self.blocks_tab_state
+            .update_scroll_state(self.chain.blocks.borrow().len());
+
+        self.transactions_tab_state
+            .update_scroll_state(self.chain.blocks.borrow().iter().map(|b| b.tx_count).sum());
+
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Blocks(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
+            SelectedTab::Transactions(_) => {
+                SelectedTab::Transactions(TransactionsTab::from(&*self))
+            }
             x => x.clone(),
         }
     }
@@ -194,18 +173,20 @@ impl App {
     fn handle_undo_tip(&mut self, tip: ChainBlock) {
         self.chain.tip = Some(tip.slot);
         self.chain.last_block_seen = Some(Utc::now());
-        self.chain.blocks = self
-            .chain
+
+        self.chain
             .blocks
-            .clone()
-            .into_iter()
-            .filter(|block| block.number >= tip.number)
-            .collect();
+            .borrow_mut()
+            .retain(|block| block.number >= tip.number);
+
         self.activity_monitor = ActivityMonitor::from(&*self);
-        self.blocks_tab_state.scroll_state = self
-            .blocks_tab_state
-            .scroll_state
-            .content_length(self.chain.blocks.len() * 3 - 2);
+
+        self.blocks_tab_state
+            .update_scroll_state(self.chain.blocks.borrow().len());
+
+        self.transactions_tab_state
+            .update_scroll_state(self.chain.blocks.borrow().iter().map(|b| b.tx_count).sum());
+
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Blocks(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
             x => x.clone(),
@@ -222,7 +203,7 @@ impl App {
 
     fn select_previous_tab(&mut self) {
         self.selected_tab = match &self.selected_tab {
-            SelectedTab::Accounts(_) => SelectedTab::Transactions(TransactionsTab {}),
+            SelectedTab::Accounts(_) => SelectedTab::Transactions(TransactionsTab::from(&*self)),
             SelectedTab::Blocks(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
             SelectedTab::Transactions(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
         }
@@ -231,39 +212,9 @@ impl App {
     fn select_next_tab(&mut self) {
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Accounts(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
-            SelectedTab::Blocks(_) => SelectedTab::Transactions(TransactionsTab {}),
+            SelectedTab::Blocks(_) => SelectedTab::Transactions(TransactionsTab::from(&*self)),
             SelectedTab::Transactions(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
         }
-    }
-
-    pub fn blocks_tab_next_row(&mut self) {
-        let i = match self.blocks_tab_state.table_state.selected() {
-            Some(i) => {
-                if i >= self.chain.blocks.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.blocks_tab_state.table_state.select(Some(i));
-        self.blocks_tab_state.scroll_state = self.blocks_tab_state.scroll_state.position(i * 3);
-    }
-
-    pub fn blocks_tab_previous_row(&mut self) {
-        let i = match self.blocks_tab_state.table_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.chain.blocks.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.blocks_tab_state.table_state.select(Some(i));
-        self.blocks_tab_state.scroll_state = self.blocks_tab_state.scroll_state.position(i * 3);
     }
 
     fn draw(&mut self, frame: &mut Frame) {
@@ -291,9 +242,11 @@ impl App {
             SelectedTab::Blocks(blocks_tab) => {
                 frame.render_stateful_widget(blocks_tab, inner_area, &mut self.blocks_tab_state)
             }
-            SelectedTab::Transactions(transactions_tab) => {
-                frame.render_widget(transactions_tab, inner_area)
-            }
+            SelectedTab::Transactions(transactions_tab) => frame.render_stateful_widget(
+                transactions_tab,
+                inner_area,
+                &mut self.transactions_tab_state,
+            ),
         }
 
         frame.render_widget(Footer::new(), footer_area);
@@ -349,6 +302,7 @@ impl TryFrom<(Args, &Context)> for App {
             events: EventHandler::new(context.clone()),
             accounts_tab_state: AccountsTabState::default(),
             blocks_tab_state: BlocksTabState::default(),
+            transactions_tab_state: TransactionsTabState::default(),
         })
     }
 }

@@ -4,7 +4,10 @@ use futures::{FutureExt, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use ratatui::crossterm::event::Event as CrosstermEvent;
 use tokio::sync::mpsc;
-use utxorpc::{CardanoSyncClient, TipEvent};
+use utxorpc::{
+    spec::sync::{any_chain_block::Chain, BlockRef, FetchBlockRequest},
+    CardanoSyncClient, TipEvent,
+};
 
 use crate::{types::DetailedBalance, wallet::types::Wallet};
 
@@ -156,12 +159,33 @@ impl EventTask {
                             },
                             None => 0,
                         };
+
+                        let response = client
+                            .fetch_block(FetchBlockRequest {
+                                r#ref: vec![BlockRef {
+                                    hash: header.hash.clone(),
+                                    index: header.slot,
+                                }],
+                                ..Default::default()
+                            })
+                            .await
+                            .unwrap();
+                        let fetch_block_response = response.into_inner();
+                        let body = match &fetch_block_response.block.first().unwrap().chain {
+                            Some(chain) => match chain {
+                                Chain::Cardano(block) => block.body.clone(),
+                            },
+                            None => None,
+                        };
+
                         let chainblock = ChainBlock {
                             slot: header.slot,
                             hash: header.hash.to_vec(),
                             number: header.height,
                             tx_count,
+                            body,
                         };
+
                         self.send(Event::App(AppEvent::NewTip(chainblock)))?;
                         self.check_balances(&mut balances).await?;
                     }
@@ -179,6 +203,7 @@ impl EventTask {
                             hash: header.hash.to_vec(),
                             number: header.height,
                             tx_count,
+                            body: None,
                         };
                         self.send(Event::App(AppEvent::UndoTip(chainblock)))?;
                         self.check_balances(&mut balances).await?;

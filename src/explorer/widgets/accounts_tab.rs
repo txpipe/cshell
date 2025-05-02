@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Text};
@@ -15,9 +16,42 @@ use crate::utils::clip;
 
 #[derive(Default)]
 pub struct AccountsTabState {
-    pub list_state: ListState,
-    pub table_state: TableState,
-    pub focus_on_table: bool,
+    list_state: ListState,
+    table_state: TableState,
+    focus_on_table: bool,
+}
+impl AccountsTabState {
+    pub fn handle_key(&mut self, key: &KeyEvent) {
+        match (key.code, key.modifiers) {
+            (KeyCode::Char('l') | KeyCode::Right, _) => {
+                if self.list_state.selected().is_some() {
+                    self.focus_on_table = true;
+                    self.table_state.select_next();
+                }
+            }
+            (KeyCode::Char('h') | KeyCode::Left, _) => {
+                if self.focus_on_table {
+                    self.focus_on_table = false;
+                    self.table_state.select(None);
+                }
+            }
+            (KeyCode::Char('j') | KeyCode::Down, _) => {
+                if self.focus_on_table {
+                    self.table_state.select_next()
+                } else {
+                    self.list_state.select_next()
+                }
+            }
+            (KeyCode::Char('k') | KeyCode::Up, _) => {
+                if self.focus_on_table {
+                    self.table_state.select_previous()
+                } else {
+                    self.list_state.select_previous()
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -25,7 +59,6 @@ pub struct AccountsTab {
     pub context: Arc<ExplorerContext>,
     pub balances: HashMap<String, DetailedBalance>,
 }
-
 impl From<&App> for AccountsTab {
     fn from(value: &App) -> Self {
         Self {
@@ -117,7 +150,7 @@ impl StatefulWidget for AccountsTab {
 
             // UTXOs table
             let Some(balance) = balance else { return };
-            let header = ["TRANSACTION", "INDEX", "COIN", "ASSETS", "DATUM"]
+            let header = ["Transaction", "Index", "Coin", "Assets", "Datum"]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()

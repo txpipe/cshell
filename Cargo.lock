@@ -587,6 +587,7 @@ dependencies = [
  "rand",
  "rand_core",
  "ratatui",
+ "regex",
  "serde",
  "serde_json",
  "serde_with",
