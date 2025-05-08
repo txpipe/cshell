@@ -117,11 +117,14 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         .find(|x| x.name.to_string() == wallet)
         .unwrap();
 
-    let password = inquire::Password::new("Password:")
-        .with_help_message("The spending password of your wallet")
-        .with_display_mode(inquire::PasswordDisplayMode::Masked)
-        .prompt()
-        .into_diagnostic()?;
+    let password = match wallet.is_unsafe {
+        true => String::new(),
+        false => inquire::Password::new("Password:")
+            .with_help_message("The spending password of your wallet")
+            .with_display_mode(inquire::PasswordDisplayMode::Masked)
+            .prompt()
+            .into_diagnostic()?,
+    };
 
     let signed = wallet.sign(response.tx, &password)?;
     let txhash = provider.submit(&signed).await?;

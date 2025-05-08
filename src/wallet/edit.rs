@@ -72,6 +72,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         modified: Local::now(),
         public_key: wallet.public_key.clone(),
         is_default: new_is_default,
+        is_unsafe: wallet.is_unsafe,
     };
 
     ctx.store.remove_wallet(wallet.clone())?;

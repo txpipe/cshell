@@ -68,6 +68,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         modified: Local::now(),
         public_key: public_key.as_ref().to_vec(),
         is_default: new_is_default,
+        is_unsafe: false,
     };
 
     ctx.store.add_wallet(&wallet)?;

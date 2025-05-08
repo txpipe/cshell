@@ -46,10 +46,17 @@ pub struct Wallet {
     pub created: DateTime<Local>,
     pub modified: DateTime<Local>,
     pub is_default: bool,
+    #[serde(default)]
+    pub is_unsafe: bool,
 }
 
 impl Wallet {
-    pub fn try_from(name: &str, password: &str, is_default: bool) -> miette::Result<NewWallet> {
+    pub fn try_from(
+        name: &str,
+        password: &str,
+        is_default: bool,
+        is_unsafe: bool,
+    ) -> miette::Result<NewWallet> {
         let (private_key, mnemonic) =
             Bip32PrivateKey::generate_with_mnemonic(OsRng, password.to_string());
         let public_key = private_key.to_public().as_bytes();
@@ -69,6 +76,7 @@ impl Wallet {
                 created: Local::now(),
                 modified: Local::now(),
                 is_default,
+                is_unsafe,
             },
         ))
     }
@@ -78,6 +86,7 @@ impl Wallet {
         password: &str,
         mnemonic: &str,
         is_default: bool,
+        is_unsafe: bool,
     ) -> miette::Result<Self> {
         let private_key =
             Bip32PrivateKey::from_bip39_mnenomic(mnemonic.to_string(), password.to_string())?;
@@ -96,6 +105,7 @@ impl Wallet {
             created: Local::now(),
             modified: Local::now(),
             is_default,
+            is_unsafe,
         })
     }
 
