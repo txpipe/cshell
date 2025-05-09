@@ -128,8 +128,6 @@ pub mod option_hex_vec_u8 {
     where
         D: Deserializer<'de>,
     {
-        // use serde::de::;
-
         let opt: Option<String> = Option::deserialize(deserializer)?;
         match opt {
             Some(s) => {

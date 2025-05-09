@@ -67,11 +67,12 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
 
     let new_wallet = Wallet {
         created: wallet.created,
-        encrypted_private_key: wallet.encrypted_private_key.clone(),
+        private_key: wallet.private_key.clone(),
         name: new_name,
         modified: Local::now(),
         public_key: wallet.public_key.clone(),
         is_default: new_is_default,
+        is_unsafe: wallet.is_unsafe,
     };
 
     ctx.store.remove_wallet(wallet.clone())?;

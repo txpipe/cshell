@@ -22,6 +22,10 @@ pub struct Args {
     /// (leave blank to enter in interactive mode)
     #[arg(long)]
     mnemonic: Option<String>,
+
+    /// disable password requirement (not recommended)
+    #[arg(long)]
+    r#unsafe: bool,
 }
 
 #[instrument("restore", skip_all)]
@@ -41,13 +45,16 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         )
     }
 
-    let password = match args.password {
-        Some(password) => password,
-        None => inquire::Password::new("Password:")
-            .with_help_message("The spending password of your wallet")
-            .with_display_mode(inquire::PasswordDisplayMode::Masked)
-            .prompt()
-            .into_diagnostic()?,
+    let password = match args.r#unsafe {
+        true => String::new(),
+        false => match args.password {
+            Some(password) => password,
+            None => inquire::Password::new("Password:")
+                .with_help_message("The spending password of your wallet")
+                .with_display_mode(inquire::PasswordDisplayMode::Masked)
+                .prompt()
+                .into_diagnostic()?,
+        },
     };
 
     let mnemonic = match args.mnemonic {
@@ -61,6 +68,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         &password,
         &mnemonic,
         ctx.store.default_wallet().is_none(),
+        args.r#unsafe,
     )?;
 
     ctx.store.add_wallet(&wallet)?;
