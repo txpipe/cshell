@@ -63,7 +63,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
 
     let wallet = Wallet {
         created: Local::now(),
-        encrypted_private_key: None,
+        private_key: None,
         name,
         modified: Local::now(),
         public_key: public_key.as_ref().to_vec(),

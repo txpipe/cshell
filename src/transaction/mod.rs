@@ -118,12 +118,14 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         .unwrap();
 
     let password = match wallet.is_unsafe {
-        true => String::new(),
-        false => inquire::Password::new("Password:")
-            .with_help_message("The spending password of your wallet")
-            .with_display_mode(inquire::PasswordDisplayMode::Masked)
-            .prompt()
-            .into_diagnostic()?,
+        true => None,
+        false => Some(
+            inquire::Password::new("Password:")
+                .with_help_message("The spending password of your wallet")
+                .with_display_mode(inquire::PasswordDisplayMode::Masked)
+                .prompt()
+                .into_diagnostic()?,
+        ),
     };
 
     let signed = wallet.sign(response.tx, &password)?;
