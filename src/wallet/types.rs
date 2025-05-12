@@ -40,35 +40,44 @@ pub struct Wallet {
     pub name: Name,
     #[serde(with = "hex::serde")]
     pub public_key: Vec<u8>,
+    #[serde(alias = "private_key", alias = "encrypted_private_key")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde(with = "utils::option_hex_vec_u8")]
-    pub encrypted_private_key: Option<Vec<u8>>,
+    pub private_key: Option<Vec<u8>>,
     pub created: DateTime<Local>,
     pub modified: DateTime<Local>,
     pub is_default: bool,
+    #[serde(default)]
+    pub is_unsafe: bool,
 }
 
 impl Wallet {
-    pub fn try_from(name: &str, password: &str, is_default: bool) -> miette::Result<NewWallet> {
+    pub fn try_from(
+        name: &str,
+        password: &str,
+        is_default: bool,
+        is_unsafe: bool,
+    ) -> miette::Result<NewWallet> {
         let (private_key, mnemonic) =
             Bip32PrivateKey::generate_with_mnemonic(OsRng, password.to_string());
         let public_key = private_key.to_public().as_bytes();
 
-        let encrypted_private_key = encrypt_private_key(
-            OsRng,
-            private_key.to_ed25519_private_key(),
-            &password.to_string(),
-        );
+        let private_key = private_key.to_ed25519_private_key();
+        let private_key = match is_unsafe {
+            true => private_key.as_bytes(),
+            false => encrypt_private_key(OsRng, private_key, &password.to_string()),
+        };
 
         Ok((
             mnemonic.to_string(),
             Self {
                 name: Name::try_from(name)?,
-                encrypted_private_key: Some(encrypted_private_key),
+                private_key: Some(private_key),
                 public_key,
                 created: Local::now(),
                 modified: Local::now(),
                 is_default,
+                is_unsafe,
             },
         ))
     }
@@ -78,29 +87,31 @@ impl Wallet {
         password: &str,
         mnemonic: &str,
         is_default: bool,
+        is_unsafe: bool,
     ) -> miette::Result<Self> {
         let private_key =
             Bip32PrivateKey::from_bip39_mnenomic(mnemonic.to_string(), password.to_string())?;
         let public_key = private_key.to_public().as_bytes();
 
-        let encrypted_private_key = encrypt_private_key(
-            OsRng,
-            private_key.to_ed25519_private_key(),
-            &password.to_string(),
-        );
+        let private_key = private_key.to_ed25519_private_key();
+        let private_key = match is_unsafe {
+            true => private_key.as_bytes(),
+            false => encrypt_private_key(OsRng, private_key, &password.to_string()),
+        };
 
         Ok(Self {
             name: Name::try_from(name)?,
-            encrypted_private_key: Some(encrypted_private_key),
+            private_key: Some(private_key),
             public_key,
             created: Local::now(),
             modified: Local::now(),
             is_default,
+            is_unsafe,
         })
     }
 
     pub fn address(&self, is_testnet: bool) -> Address {
-        let pk = match self.encrypted_private_key {
+        let pk = match self.private_key {
             Some(_) => Bip32PublicKey::from_bytes(self.public_key.clone().try_into().unwrap())
                 .to_ed25519_pubkey(),
             None => PublicKey::from_str(&hex::encode(&self.public_key)).unwrap(),
@@ -123,14 +134,22 @@ impl Wallet {
         }
     }
 
-    pub fn sign(&self, tx: Vec<u8>, password: &String) -> Result<Vec<u8>, miette::Error> {
-        let Some(encrypted) = &self.encrypted_private_key else {
+    pub fn sign(&self, tx: Vec<u8>, password: &Option<String>) -> Result<Vec<u8>, miette::Error> {
+        let Some(private_key) = &self.private_key else {
             bail!("cant sign tx with RO wallet")
         };
 
+        if password.is_none() && !self.is_unsafe {
+            bail!("safe wallets require password")
+        }
+
         let mut decoded: Tx = minicbor::decode(&tx).into_diagnostic()?;
 
-        let private_key = decrypt_private_key(password, encrypted.to_vec())?;
+        let private_key = match password {
+            Some(password) => decrypt_private_key(password, private_key.to_vec())?,
+            None => PrivateKey::try_from(private_key.as_slice())?,
+        };
+
         let signature = private_key.sign(decoded.transaction_body.compute_hash());
 
         let mut vkey_witnesses = decoded
@@ -324,6 +343,30 @@ impl From<SecretKey> for PrivateKey {
 impl From<SecretKeyExtended> for PrivateKey {
     fn from(key: SecretKeyExtended) -> Self {
         PrivateKey::Extended(key)
+    }
+}
+
+impl TryFrom<&[u8]> for PrivateKey {
+    type Error = miette::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        match value.len() {
+            SecretKey::SIZE => {
+                let mut buf = [0u8; SecretKey::SIZE];
+                buf.copy_from_slice(value);
+                let secret_key: SecretKey = buf.into();
+                Ok(secret_key.into())
+            }
+            SecretKeyExtended::SIZE => {
+                let mut buf = [0u8; SecretKeyExtended::SIZE];
+                buf.copy_from_slice(value);
+                let secret_key = SecretKeyExtended::from_bytes(buf)
+                    .into_diagnostic()
+                    .context("decoding secret key")?;
+                Ok(secret_key.into())
+            }
+            _ => miette::bail!("Invalid key length: {}", value.len()),
+        }
     }
 }
 
