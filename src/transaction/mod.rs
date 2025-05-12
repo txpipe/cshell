@@ -12,7 +12,7 @@ pub struct Args {
     tx3_file: PathBuf,
 
     #[arg(long, help = "Args for TX3 file describing transaction")]
-    tx3_args: Option<String>,
+    tx3_args_json: Option<String>,
 
     #[arg(long, help = "Template for TX3 file")]
     tx3_template: Option<String>,
@@ -62,7 +62,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
 
     let prototx = protocol.new_tx(&template).unwrap();
 
-    let argvalues = match args.tx3_args {
+    let argvalues = match args.tx3_args_json {
         Some(args) => {
             let json_value = serde_json::from_str(&args)
                 .into_diagnostic()
