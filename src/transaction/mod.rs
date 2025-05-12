@@ -14,6 +14,9 @@ pub struct Args {
     #[arg(long, help = "Args for TX3 file describing transaction")]
     tx3_args: Option<String>,
 
+    #[arg(long, help = "Template for TX3 file")]
+    tx3_template: Option<String>,
+
     #[arg(long, help = "Wallet that will sign the transaction")]
     signer: Option<String>,
 
@@ -43,15 +46,21 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
 
     let txs: Vec<String> = protocol.txs().map(|x| x.name.to_string()).collect();
 
-    let name = if txs.len() == 1 {
-        txs.first().unwrap().clone()
-    } else {
-        inquire::Select::new("What transaction do you want to build?", txs)
-            .prompt()
-            .into_diagnostic()?
+    let template = match args.tx3_template {
+        Some(template) => template,
+        None => {
+            let template = if txs.len() == 1 {
+                txs.first().unwrap().clone()
+            } else {
+                inquire::Select::new("What transaction do you want to build?", txs)
+                    .prompt()
+                    .into_diagnostic()?
+            };
+            template
+        }
     };
 
-    let prototx = protocol.new_tx(&name).unwrap();
+    let prototx = protocol.new_tx(&template).unwrap();
 
     let argvalues = match args.tx3_args {
         Some(args) => {
