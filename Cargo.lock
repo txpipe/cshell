@@ -3271,9 +3271,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tx3-cardano"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0c8dea079dfd7800e1d0777c0116c16f7a8a826e16ccc7bb6c9f495a318f300"
+checksum = "ab9b78a417517831f5e3749f2d407bddd053eb9fe848af733f197e869cf5222a"
 dependencies = [
  "hex",
  "pallas",
@@ -3287,9 +3287,9 @@ dependencies = [
 
 [[package]]
 name = "tx3-lang"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0ac14a43bfb08248192c8df5cefa024a9a98d78a7fedee5454c4119fff06b0a"
+checksum = "f8b33d3688e704cfb6401b2272fbaee645f2e51fb215f995288bdb5dfd9b1ee3"
 dependencies = [
  "bincode",
  "hex",
