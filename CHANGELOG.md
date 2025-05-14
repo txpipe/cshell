@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2025-05-14
+
+### 🚀 Features
+
+- Add option for unsafe wallets (#11)
+- Support for args and signer in transaction command (#12)
+
 ## [0.4.0] - 2025-05-02
 
 ### 🚀 Features
@@ -11,6 +18,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Update Pallas and Tx3 deps (#10)
+- Release cshell version 0.4.0
 
 ## [0.3.1] - 2025-04-22
 
