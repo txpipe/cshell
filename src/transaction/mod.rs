@@ -11,6 +11,15 @@ pub struct Args {
     #[arg(long, help = "Path for TX3 file describing transaction")]
     tx3_file: PathBuf,
 
+    #[arg(long, help = "Args for TX3 file describing transaction")]
+    tx3_args_json: Option<String>,
+
+    #[arg(long, help = "Template for TX3 file")]
+    tx3_template: Option<String>,
+
+    #[arg(long, help = "Wallet that will sign the transaction")]
+    signer: Option<String>,
+
     /// Name of the provider to use. If undefined, will use default
     #[arg(long, help = "Path for TX3 file describing transaction")]
     provider: Option<String>,
@@ -37,51 +46,74 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
 
     let txs: Vec<String> = protocol.txs().map(|x| x.name.to_string()).collect();
 
-    let name = if txs.len() == 1 {
-        txs.first().unwrap().clone()
-    } else {
-        inquire::Select::new("What transaction do you want to build?", txs)
-            .prompt()
-            .into_diagnostic()?
-    };
-
-    let prototx = protocol.new_tx(&name).unwrap();
-    let params = prototx.find_params();
-
-    let mut argvalues = serde_json::Map::new();
-    for (key, value) in params {
-        match value {
-            tx3_lang::ir::Type::Address => {
-                let options = ctx
-                    .store
-                    .wallets()
-                    .iter()
-                    .map(|x| x.name.to_string())
-                    .collect();
-                let wallet = inquire::Select::new(&format!("{}: ", &key), options)
-                    .prompt()
-                    .into_diagnostic()?;
-                let address = ctx
-                    .store
-                    .wallets()
-                    .iter()
-                    .find(|x| x.name.to_string() == wallet)
-                    .unwrap()
-                    .address(provider.is_testnet());
-                argvalues.insert(key, serde_json::Value::String(address.to_bech32().unwrap()));
-            }
-            tx3_lang::ir::Type::Int => {
-                let value = inquire::Text::new(&format!("{}: ", &key))
+    let template = match args.tx3_template {
+        Some(template) => template,
+        None => {
+            let template = if txs.len() == 1 {
+                txs.first().unwrap().clone()
+            } else {
+                inquire::Select::new("What transaction do you want to build?", txs)
                     .prompt()
                     .into_diagnostic()?
-                    .parse::<u64>()
-                    .into_diagnostic()
-                    .context("invalid integer value")?;
-                argvalues.insert(key, serde_json::Value::Number(value.into()));
+            };
+            template
+        }
+    };
+
+    let prototx = protocol.new_tx(&template).unwrap();
+
+    let argvalues = match args.tx3_args_json {
+        Some(args) => {
+            let json_value = serde_json::from_str(&args)
+                .into_diagnostic()
+                .context("invalid tx3-args")?;
+
+            let serde_json::Value::Object(value) = json_value else {
+                bail!("tx3-args must be an object");
+            };
+
+            value
+        }
+        None => {
+            let params = prototx.find_params();
+            let mut argvalues = serde_json::Map::new();
+            for (key, value) in params {
+                match value {
+                    tx3_lang::ir::Type::Address => {
+                        let options = ctx
+                            .store
+                            .wallets()
+                            .iter()
+                            .map(|x| x.name.to_string())
+                            .collect();
+                        let wallet = inquire::Select::new(&format!("{}: ", &key), options)
+                            .prompt()
+                            .into_diagnostic()?;
+                        let address = ctx
+                            .store
+                            .wallets()
+                            .iter()
+                            .find(|x| x.name.to_string() == wallet)
+                            .unwrap()
+                            .address(provider.is_testnet());
+                        argvalues
+                            .insert(key, serde_json::Value::String(address.to_bech32().unwrap()));
+                    }
+                    tx3_lang::ir::Type::Int => {
+                        let value = inquire::Text::new(&format!("{}: ", &key))
+                            .prompt()
+                            .into_diagnostic()?
+                            .parse::<u64>()
+                            .into_diagnostic()
+                            .context("invalid integer value")?;
+                        argvalues.insert(key, serde_json::Value::Number(value.into()));
+                    }
+                    _ => todo!(),
+                };
             }
-            _ => todo!(),
-        };
-    }
+            argvalues
+        }
+    };
 
     let mut builder = ObjectParams::new();
     builder
@@ -97,25 +129,33 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     builder.insert("args", argvalues).unwrap();
 
     let response = provider.trp_resolve(&builder).await?;
-    let options = ctx
-        .store
-        .wallets()
-        .iter()
-        .map(|x| x.name.to_string())
-        .collect();
-    let wallet = inquire::Select::new(
-        "What wallet should be used to sign the transaction?",
-        options,
-    )
-    .prompt()
-    .into_diagnostic()?;
+    let signer = match args.signer {
+        Some(signer) => signer,
+        None => {
+            let options = ctx
+                .store
+                .wallets()
+                .iter()
+                .map(|x| x.name.to_string())
+                .collect();
+            inquire::Select::new(
+                "What wallet should be used to sign the transaction?",
+                options,
+            )
+            .prompt()
+            .into_diagnostic()?
+        }
+    };
 
     let wallet = ctx
         .store
         .wallets()
         .iter()
-        .find(|x| x.name.to_string() == wallet)
-        .unwrap();
+        .find(|x| x.name.to_string() == signer);
+
+    let Some(wallet) = wallet else {
+        bail!("invalid signer wallet")
+    };
 
     let password = match wallet.is_unsafe {
         true => None,
