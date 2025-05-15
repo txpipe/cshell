@@ -5,6 +5,7 @@ use tracing_subscriber::{filter::LevelFilter, prelude::*};
 mod explorer;
 mod output;
 mod provider;
+mod search;
 mod store;
 mod transaction;
 mod types;
@@ -62,6 +63,9 @@ enum Commands {
     /// Explore the blockchain
     #[command()]
     Explorer(explorer::Args),
+
+    /// Search on chain data
+    Search(search::Args),
 }
 
 #[derive(Clone, ValueEnum)]
