@@ -131,6 +131,7 @@ async fn main() -> miette::Result<()> {
         Commands::Transaction(args) => transaction::run(args, &ctx).await?,
         Commands::Wallet(args) => wallet::run(args, &mut ctx).await?,
         Commands::Explorer(args) => explorer::run(args, &ctx).await?,
+        Commands::Search(args) => search::run(args, &mut ctx).await?,
     };
 
     ctx.store.write()

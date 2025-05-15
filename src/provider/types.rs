@@ -10,8 +10,11 @@ use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use utxorpc::{
-    spec::query::any_utxo_pattern::UtxoPattern, CardanoQueryClient, CardanoSubmitClient,
-    CardanoSyncClient, ClientBuilder, InnerService,
+    spec::{
+        query::any_utxo_pattern::UtxoPattern,
+        sync::{AnyChainBlock, BlockRef, FetchBlockRequest},
+    },
+    CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, ClientBuilder, InnerService,
 };
 
 use crate::{
@@ -267,6 +270,34 @@ impl Provider {
             .request("trp.resolve", params.to_owned())
             .await
             .into_diagnostic()
+    }
+
+    pub async fn fetch_block(
+        &self,
+        refs: Vec<(Vec<u8>, u64)>,
+    ) -> miette::Result<Vec<AnyChainBlock>> {
+        let mut client: utxorpc::CardanoSyncClient = self.client().await?;
+
+        let refs = refs
+            .iter()
+            .map(|(hash, index)| BlockRef {
+                hash: hash.clone().into(),
+                index: *index,
+            })
+            .collect();
+
+        let request = FetchBlockRequest {
+            r#ref: refs,
+            ..Default::default()
+        };
+
+        let response = client
+            .fetch_block(request)
+            .await
+            .into_diagnostic()?
+            .into_inner();
+
+        Ok(response.block)
     }
 }
 
