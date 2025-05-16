@@ -120,7 +120,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         .insert(
             "tir",
             serde_json::json!({
-                "version": "v1alpha1",
+                "version": tx3_lang::ir::IR_VERSION.to_string(),
                 "encoding": "hex",
                 "bytecode": hex::encode(prototx.ir_bytes())
             }),
