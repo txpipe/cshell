@@ -164,7 +164,8 @@ impl EventTask {
                             .fetch_block(FetchBlockRequest {
                                 r#ref: vec![BlockRef {
                                     hash: header.hash.clone(),
-                                    index: header.slot,
+                                    slot: header.slot,
+                                    height: header.height,
                                 }],
                                 ..Default::default()
                             })
@@ -209,7 +210,7 @@ impl EventTask {
                         self.check_balances(&mut balances).await?;
                     }
                     TipEvent::Reset(point) => {
-                        self.send(Event::App(AppEvent::Reset(point.index)))?;
+                        self.send(Event::App(AppEvent::Reset(point.slot)))?;
                         self.check_balances(&mut balances).await?;
                     }
                 }

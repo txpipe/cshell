@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use utxorpc::{
     spec::{
-        query::any_utxo_pattern::UtxoPattern,
+        query::{any_utxo_pattern::UtxoPattern, AnyChainTx, ReadTxRequest},
         sync::{AnyChainBlock, BlockRef, FetchBlockRequest},
     },
     CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, ClientBuilder, InnerService,
@@ -85,7 +85,7 @@ impl Provider {
             Some(blockref) => {
                 println!(
                     "Successfull request, block tip at slot {} and hash {}.",
-                    blockref.index,
+                    blockref.slot,
                     hex::encode(blockref.hash)
                 )
             }
@@ -282,7 +282,8 @@ impl Provider {
             .iter()
             .map(|(hash, index)| BlockRef {
                 hash: hash.clone().into(),
-                index: *index,
+                slot: *index,
+                ..Default::default()
             })
             .collect();
 
@@ -298,6 +299,23 @@ impl Provider {
             .into_inner();
 
         Ok(response.block)
+    }
+
+    pub async fn fetch_tx(&self, hash: Vec<u8>) -> miette::Result<Option<AnyChainTx>> {
+        let mut client: utxorpc::CardanoQueryClient = self.client().await?;
+
+        let request = ReadTxRequest {
+            hash: hash.into(),
+            ..Default::default()
+        };
+
+        let response = client
+            .read_tx(request)
+            .await
+            .into_diagnostic()?
+            .into_inner();
+
+        Ok(response.tx)
     }
 }
 
