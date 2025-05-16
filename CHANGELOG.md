@@ -2,12 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2025-05-16
+
+### 🐛 Bug Fixes
+
+- Adjusted cshell transaction to use tx3 lang version (#14)
+
 ## [0.5.0] - 2025-05-14
 
 ### 🚀 Features
 
 - Add option for unsafe wallets (#11)
 - Support for args and signer in transaction command (#12)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.5.0
 
 ## [0.4.0] - 2025-05-02
 
