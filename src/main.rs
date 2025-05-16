@@ -5,6 +5,7 @@ use tracing_subscriber::{filter::LevelFilter, prelude::*};
 mod explorer;
 mod output;
 mod provider;
+mod search;
 mod store;
 mod transaction;
 mod types;
@@ -62,6 +63,9 @@ enum Commands {
     /// Explore the blockchain
     #[command()]
     Explorer(explorer::Args),
+
+    /// Search on chain data
+    Search(search::Args),
 }
 
 #[derive(Clone, ValueEnum)]
@@ -127,6 +131,7 @@ async fn main() -> miette::Result<()> {
         Commands::Transaction(args) => transaction::run(args, &ctx).await?,
         Commands::Wallet(args) => wallet::run(args, &mut ctx).await?,
         Commands::Explorer(args) => explorer::run(args, &ctx).await?,
+        Commands::Search(args) => search::run(args, &mut ctx).await?,
     };
 
     ctx.store.write()
