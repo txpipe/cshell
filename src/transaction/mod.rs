@@ -44,8 +44,8 @@ enum Commands {
 pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     match args.command {
         Some(command) => match command {
-            Commands::Sign(args) => sign::run(args, &ctx).await?,
-            Commands::Submit(args) => submit::run(args, &ctx).await?,
+            Commands::Sign(args) => sign::run(args, ctx).await?,
+            Commands::Submit(args) => submit::run(args, ctx).await?,
         },
         None => {
             let provider = match args.provider {
