@@ -82,7 +82,7 @@ impl Provider {
             Some(blockref) => {
                 println!(
                     "Successfull request, block tip at slot {} and hash {}.",
-                    blockref.index,
+                    blockref.slot,
                     hex::encode(blockref.hash)
                 )
             }

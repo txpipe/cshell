@@ -144,58 +144,60 @@ impl EventTask {
             balances.insert(key, value);
         }
 
-        loop {
-            let mut client: CardanoSyncClient = self.context.provider.client().await?;
-            let mut tip = client.follow_tip(vec![]).await.unwrap();
+        let mut client: CardanoSyncClient = self.context.provider.client().await?;
+        let mut tip = client.follow_tip(vec![]).await.unwrap();
 
-            while let Ok(event) = tip.event().await {
-                match event {
-                    TipEvent::Apply(block) => {
-                        let header = block.parsed.clone().unwrap().header.unwrap();
+        while let Some(event) = tip.event().await.into_diagnostic()? {
+            match event {
+                TipEvent::Apply(block) => {
+                    let header = block.parsed.clone().unwrap().header.unwrap();
 
-                        let body = block.parsed.and_then(|b| b.body);
+                    let body = block.parsed.and_then(|b| b.body);
 
-                        let tx_count = match &body {
+                    let tx_count = match &body {
+                        Some(body) => body.tx.len(),
+                        None => 0,
+                    };
+
+                    let chainblock = ChainBlock {
+                        slot: header.slot,
+                        hash: header.hash.to_vec(),
+                        number: header.height,
+                        tx_count,
+                        body,
+                    };
+
+                    self.send(Event::App(AppEvent::NewTip(chainblock)))?;
+                    self.check_balances(&mut balances).await?;
+                }
+                TipEvent::Undo(block) => {
+                    let header = block.parsed.clone().unwrap().header.unwrap();
+                    let tx_count = match block.parsed {
+                        Some(parsed) => match parsed.body {
                             Some(body) => body.tx.len(),
                             None => 0,
-                        };
-
-                        let chainblock = ChainBlock {
-                            slot: header.slot,
-                            hash: header.hash.to_vec(),
-                            number: header.height,
-                            tx_count,
-                            body,
-                        };
-
-                        self.send(Event::App(AppEvent::NewTip(chainblock)))?;
-                        self.check_balances(&mut balances).await?;
-                    }
-                    TipEvent::Undo(block) => {
-                        let header = block.parsed.clone().unwrap().header.unwrap();
-                        let tx_count = match block.parsed {
-                            Some(parsed) => match parsed.body {
-                                Some(body) => body.tx.len(),
-                                None => 0,
-                            },
-                            None => 0,
-                        };
-                        let chainblock = ChainBlock {
-                            slot: header.slot,
-                            hash: header.hash.to_vec(),
-                            number: header.height,
-                            tx_count,
-                            body: None,
-                        };
-                        self.send(Event::App(AppEvent::UndoTip(chainblock)))?;
-                        self.check_balances(&mut balances).await?;
-                    }
-                    TipEvent::Reset(point) => {
-                        self.send(Event::App(AppEvent::Reset(point.index)))?;
-                        self.check_balances(&mut balances).await?;
-                    }
+                        },
+                        None => 0,
+                    };
+                    let chainblock = ChainBlock {
+                        slot: header.slot,
+                        hash: header.hash.to_vec(),
+                        number: header.height,
+                        tx_count,
+                        body: None,
+                    };
+                    self.send(Event::App(AppEvent::UndoTip(chainblock)))?;
+                    self.check_balances(&mut balances).await?;
+                }
+                TipEvent::Reset(point) => {
+                    self.send(Event::App(AppEvent::Reset(point.slot)))?;
+                    self.check_balances(&mut balances).await?;
                 }
             }
         }
+
+        self.send(Event::App(AppEvent::Disconnected))?;
+
+        Ok(())
     }
 }

@@ -3,7 +3,6 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
     sync::Arc,
-    time::Duration,
 };
 
 use chrono::{DateTime, Utc};
@@ -15,7 +14,6 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 use strum::Display;
-use tokio::time::sleep;
 use utxorpc::spec::cardano::BlockBody;
 
 use crate::{provider::types::Provider, store::Store, types::DetailedBalance, Context};
@@ -70,6 +68,7 @@ pub struct Args {
 
 pub struct App {
     done: bool,
+    disconnected: bool,
     should_show_help: bool,
     selected_tab: SelectedTab,
     chain: ChainState,
@@ -102,10 +101,7 @@ impl App {
                     AppEvent::BalanceUpdate((address, balance)) => {
                         self.handle_balance_update(address, balance)
                     }
-                    AppEvent::Disconnected => {
-                        dbg!("Disconnected");
-                        sleep(Duration::from_secs(1)).await;
-                    }
+                    AppEvent::Disconnected => self.disconnected = true,
                 },
                 Event::Tick => self.handle_tick(),
             }
@@ -303,6 +299,7 @@ impl TryFrom<(Args, &Context)> for App {
             }),
             activity_monitor: ActivityMonitor::default(),
             done: false,
+            disconnected: false,
             should_show_help: false,
             chain: ChainState::default(),
             events: EventHandler::new(context.clone()),
