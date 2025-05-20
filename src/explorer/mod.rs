@@ -3,6 +3,7 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
     sync::Arc,
+    time::Duration,
 };
 
 use chrono::{DateTime, Utc};
@@ -14,6 +15,7 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 use strum::Display;
+use tokio::time::sleep;
 use utxorpc::spec::cardano::BlockBody;
 
 use crate::{provider::types::Provider, store::Store, types::DetailedBalance, Context};
@@ -99,6 +101,10 @@ impl App {
                     AppEvent::UndoTip(tip) => self.handle_undo_tip(tip),
                     AppEvent::BalanceUpdate((address, balance)) => {
                         self.handle_balance_update(address, balance)
+                    }
+                    AppEvent::Disconnected => {
+                        dbg!("Disconnected");
+                        sleep(Duration::from_secs(1)).await;
                     }
                 },
                 Event::Tick => self.handle_tick(),

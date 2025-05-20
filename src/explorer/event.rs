@@ -4,10 +4,7 @@ use futures::{FutureExt, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use ratatui::crossterm::event::Event as CrosstermEvent;
 use tokio::sync::mpsc;
-use utxorpc::{
-    spec::sync::{any_chain_block::Chain, BlockRef, FetchBlockRequest},
-    CardanoSyncClient, TipEvent,
-};
+use utxorpc::{CardanoSyncClient, TipEvent};
 
 use crate::{types::DetailedBalance, wallet::types::Wallet};
 
@@ -26,6 +23,8 @@ pub enum AppEvent {
     NewTip(ChainBlock),
     UndoTip(ChainBlock),
     BalanceUpdate((String, DetailedBalance)),
+    #[allow(dead_code)]
+    Disconnected,
 }
 
 #[derive(Debug)]
@@ -72,6 +71,7 @@ impl EventTask {
 
         let sender = async {
             self.sender.closed().await;
+            dbg!("xxxx");
             Ok::<_, miette::Error>(())
         };
 
@@ -152,30 +152,12 @@ impl EventTask {
                 match event {
                     TipEvent::Apply(block) => {
                         let header = block.parsed.clone().unwrap().header.unwrap();
-                        let tx_count = match block.parsed {
-                            Some(parsed) => match parsed.body {
-                                Some(body) => body.tx.len(),
-                                None => 0,
-                            },
-                            None => 0,
-                        };
 
-                        let response = client
-                            .fetch_block(FetchBlockRequest {
-                                r#ref: vec![BlockRef {
-                                    hash: header.hash.clone(),
-                                    index: header.slot,
-                                }],
-                                ..Default::default()
-                            })
-                            .await
-                            .unwrap();
-                        let fetch_block_response = response.into_inner();
-                        let body = match &fetch_block_response.block.first().unwrap().chain {
-                            Some(chain) => match chain {
-                                Chain::Cardano(block) => block.body.clone(),
-                            },
-                            None => None,
+                        let body = block.parsed.and_then(|b| b.body);
+
+                        let tx_count = match &body {
+                            Some(body) => body.tx.len(),
+                            None => 0,
                         };
 
                         let chainblock = ChainBlock {
