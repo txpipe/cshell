@@ -6,6 +6,7 @@ use miette::{bail, Context, IntoDiagnostic};
 use tracing::instrument;
 use tx3_lang::Protocol;
 
+mod resolve;
 mod sign;
 mod submit;
 
@@ -33,6 +34,9 @@ pub struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Resolve a transaction
+    Resolve(resolve::Args),
+
     /// Sign a transaction cbor
     Sign(sign::Args),
 
@@ -46,6 +50,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         Some(command) => match command {
             Commands::Sign(args) => sign::run(args, ctx).await?,
             Commands::Submit(args) => submit::run(args, ctx).await?,
+            Commands::Resolve(args) => resolve::run(args, ctx).await?,
         },
         None => {
             let provider = match args.provider {
