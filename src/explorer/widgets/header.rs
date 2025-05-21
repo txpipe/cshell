@@ -16,6 +16,7 @@ pub struct Header {
     pub selected_tab: SelectedTab,
     pub tip: Option<u64>,
     pub provider: Provider,
+    pub disconnected: bool,
 }
 impl From<&App> for Header {
     fn from(value: &App) -> Self {
@@ -23,6 +24,7 @@ impl From<&App> for Header {
             selected_tab: value.selected_tab.clone(),
             tip: value.chain.tip,
             provider: value.context.provider.clone(),
+            disconnected: value.disconnected,
         }
     }
 }
@@ -53,21 +55,37 @@ impl Widget for Header {
             )
             .render(title_area, buf);
 
-        let name = Paragraph::new(match self.tip {
-            Some(tip) => vec![
+        let name = if self.disconnected {
+            Paragraph::new(vec![
                 Line::from(" CShell Explorer ".to_string()),
-                Line::from(format!(" Tip: {} ", tip)),
+                Line::from(" Disconnected ").style(Style::new().bold()),
                 Line::from(format!(" Provider: {} ", self.provider.name())),
-            ],
-            None => vec![Line::from(" CShell Explorer ".to_string())],
-        })
-        .centered()
-        .block(
-            Block::bordered()
-                .border_style(Style::new().blue())
-                .title(" Provider "),
-        )
-        .style(Style::default().fg(ratatui::style::Color::Blue));
+            ])
+            .centered()
+            .block(
+                Block::bordered()
+                    .border_style(Style::new().red())
+                    .title(" Provider "),
+            )
+            .style(Style::default().fg(ratatui::style::Color::Red))
+        } else {
+            Paragraph::new(match self.tip {
+                Some(tip) => vec![
+                    Line::from(" CShell Explorer ".to_string()),
+                    Line::from(format!(" Tip: {} ", tip)),
+                    Line::from(format!(" Provider: {} ", self.provider.name())),
+                ],
+                None => vec![Line::from(" CShell Explorer ".to_string())],
+            })
+            .centered()
+            .block(
+                Block::bordered()
+                    .border_style(Style::new().blue())
+                    .title(" Provider "),
+            )
+            .style(Style::default().fg(ratatui::style::Color::Blue))
+        };
+
         name.render(provider_area, buf);
     }
 }

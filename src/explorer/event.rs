@@ -23,7 +23,6 @@ pub enum AppEvent {
     NewTip(ChainBlock),
     UndoTip(ChainBlock),
     BalanceUpdate((String, DetailedBalance)),
-    #[allow(dead_code)]
     Disconnected,
 }
 
@@ -71,7 +70,6 @@ impl EventTask {
 
         let sender = async {
             self.sender.closed().await;
-            dbg!("xxxx");
             Ok::<_, miette::Error>(())
         };
 
