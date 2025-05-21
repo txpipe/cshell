@@ -1,9 +1,13 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
 
+use backoff::{backoff::Backoff, ExponentialBackoff};
 use futures::{FutureExt, StreamExt};
 use miette::{Context, IntoDiagnostic};
 use ratatui::crossterm::event::Event as CrosstermEvent;
-use tokio::sync::mpsc;
+use tokio::{
+    sync::{mpsc, RwLock},
+    time::sleep,
+};
 use utxorpc::{CardanoSyncClient, TipEvent};
 
 use crate::{types::DetailedBalance, wallet::types::Wallet};
@@ -17,13 +21,29 @@ pub enum Event {
     Tick,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConnectionState {
+    Connected,
+    Retrying,
+    Disconnected,
+}
+impl Display for ConnectionState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionState::Connected => write!(f, "connected"),
+            ConnectionState::Retrying => write!(f, "retrying"),
+            ConnectionState::Disconnected => write!(f, "disconnected"),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum AppEvent {
     Reset(u64),
     NewTip(ChainBlock),
     UndoTip(ChainBlock),
     BalanceUpdate((String, DetailedBalance)),
-    Disconnected,
+    State(ConnectionState),
 }
 
 #[derive(Debug)]
@@ -50,11 +70,16 @@ impl EventHandler {
 struct EventTask {
     sender: mpsc::UnboundedSender<Event>,
     context: Arc<ExplorerContext>,
+    state: RwLock<ConnectionState>,
 }
 
 impl EventTask {
     fn new(sender: mpsc::UnboundedSender<Event>, context: Arc<ExplorerContext>) -> Self {
-        Self { sender, context }
+        Self {
+            sender,
+            context,
+            state: RwLock::new(ConnectionState::Disconnected),
+        }
     }
 
     async fn run(self) -> miette::Result<()> {
@@ -82,7 +107,7 @@ impl EventTask {
             }
         };
 
-        let follow_tip = async { self.follow_tip().await };
+        let follow_tip = async { self.run_follow_tip().await };
 
         tokio::try_join!(sender, keys(), follow_tip, ticks())?;
         Ok(())
@@ -128,8 +153,46 @@ impl EventTask {
         Ok(())
     }
 
+    async fn update_connection(&self, connection: ConnectionState) -> miette::Result<()> {
+        *self.state.write().await = connection.clone();
+        self.send(Event::App(AppEvent::State(connection)))
+    }
+
+    async fn run_follow_tip(&self) -> miette::Result<()> {
+        let max_elapsed_time = Duration::from_secs(60 * 5);
+
+        let mut backoff = ExponentialBackoff {
+            max_elapsed_time: Some(max_elapsed_time),
+            ..Default::default()
+        };
+
+        loop {
+            if self.follow_tip().await.is_err() {
+                if self.state.read().await.clone() == ConnectionState::Connected {
+                    backoff = ExponentialBackoff {
+                        max_elapsed_time: Some(max_elapsed_time),
+                        ..Default::default()
+                    };
+                }
+
+                self.update_connection(ConnectionState::Retrying).await?;
+
+                if let Some(duration) = backoff.next_backoff() {
+                    sleep(duration).await;
+                } else {
+                    self.update_connection(ConnectionState::Disconnected)
+                        .await?;
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn follow_tip(&self) -> miette::Result<()> {
         let mut balances = HashMap::new();
+
         for wallet in self.context.store.wallets() {
             let key = wallet
                 .address(self.context.provider.is_testnet())
@@ -143,19 +206,16 @@ impl EventTask {
         }
 
         let mut client: CardanoSyncClient = self.context.provider.client().await?;
-        let mut tip = client.follow_tip(vec![]).await.unwrap();
+        let mut tip = client.follow_tip(vec![]).await.into_diagnostic()?;
+
+        self.update_connection(ConnectionState::Connected).await?;
 
         while let Some(event) = tip.event().await.into_diagnostic()? {
             match event {
                 TipEvent::Apply(block) => {
                     let header = block.parsed.clone().unwrap().header.unwrap();
-
                     let body = block.parsed.and_then(|b| b.body);
-
-                    let tx_count = match &body {
-                        Some(body) => body.tx.len(),
-                        None => 0,
-                    };
+                    let tx_count = body.as_ref().map_or(0, |b| b.tx.len());
 
                     let chainblock = ChainBlock {
                         slot: header.slot,
@@ -170,13 +230,8 @@ impl EventTask {
                 }
                 TipEvent::Undo(block) => {
                     let header = block.parsed.clone().unwrap().header.unwrap();
-                    let tx_count = match block.parsed {
-                        Some(parsed) => match parsed.body {
-                            Some(body) => body.tx.len(),
-                            None => 0,
-                        },
-                        None => 0,
-                    };
+                    let tx_count = block.parsed.and_then(|p| p.body).map_or(0, |b| b.tx.len());
+
                     let chainblock = ChainBlock {
                         slot: header.slot,
                         hash: header.hash.to_vec(),
@@ -184,6 +239,7 @@ impl EventTask {
                         tx_count,
                         body: None,
                     };
+
                     self.send(Event::App(AppEvent::UndoTip(chainblock)))?;
                     self.check_balances(&mut balances).await?;
                 }
@@ -194,8 +250,6 @@ impl EventTask {
             }
         }
 
-        self.send(Event::App(AppEvent::Disconnected))?;
-
-        Ok(())
+        Err(miette::miette!("Tip stream ended unexpectedly"))
     }
 }

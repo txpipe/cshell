@@ -49,6 +49,7 @@ url = { version = "2.5.0", features = ["serde"] }
 # utxorpc = "0.10.0"
 utxorpc = { path = "../../../utxorpc/rust-sdk" }
 regex = "1.11.1"
+backoff = "0.4.0"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
