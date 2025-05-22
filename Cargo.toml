@@ -47,7 +47,8 @@ tx3-cardano = "0.4.0"
 url = { version = "2.5.0", features = ["serde"] }
 
 # utxorpc = "0.10.0"
-utxorpc = { path = "../../../utxorpc/rust-sdk" }
+# utxorpc = { path = "../../../utxorpc/rust-sdk" }
+utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
 regex = "1.11.1"
 backoff = "0.4.0"
 

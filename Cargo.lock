@@ -613,7 +613,7 @@ dependencies = [
  "tx3-cardano",
  "tx3-lang",
  "url",
- "utxorpc 0.10.0",
+ "utxorpc 0.10.0 (git+https://github.com/utxorpc/rust-sdk)",
 ]
 
 [[package]]
@@ -2016,7 +2016,7 @@ dependencies = [
  "pallas-traverse",
  "pallas-validate",
  "prost-types",
- "utxorpc-spec 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "utxorpc-spec 0.16.0",
 ]
 
 [[package]]
@@ -3422,19 +3422,20 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "utxorpc"
 version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bea8f520897c0d0b8048413a2ad72044cc5cbc00c98219a750f048be616f3d7f"
 dependencies = [
  "bytes",
  "thiserror 1.0.69",
  "tokio",
  "tonic",
- "utxorpc-spec 0.16.0",
+ "utxorpc-spec 0.15.0",
 ]
 
 [[package]]
 name = "utxorpc"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea8f520897c0d0b8048413a2ad72044cc5cbc00c98219a750f048be616f3d7f"
+source = "git+https://github.com/utxorpc/rust-sdk#112a89ca6a688ea1eaa72cfdfd919c0edc013b7c"
 dependencies = [
  "bytes",
  "thiserror 1.0.69",
@@ -3448,20 +3449,6 @@ name = "utxorpc-spec"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9c73cb3e15766a14cbc99fbd6dbbee04496fc9c64b47b088ae1d7698d43e357"
-dependencies = [
- "bytes",
- "futures-core",
- "pbjson",
- "pbjson-types",
- "prost",
- "prost-types",
- "serde",
- "tonic",
-]
-
-[[package]]
-name = "utxorpc-spec"
-version = "0.16.0"
 dependencies = [
  "bytes",
  "futures-core",

@@ -244,7 +244,7 @@ impl EventTask {
                     self.check_balances(&mut balances).await?;
                 }
                 TipEvent::Reset(point) => {
-                    self.send(Event::App(AppEvent::Reset(point.slot)))?;
+                    self.send(Event::App(AppEvent::Reset(point.index)))?;
                     self.check_balances(&mut balances).await?;
                 }
             }
