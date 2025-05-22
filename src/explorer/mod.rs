@@ -21,7 +21,7 @@ use crate::{provider::types::Provider, store::Store, types::DetailedBalance, Con
 pub mod event;
 pub mod widgets;
 
-use event::{AppEvent, Event, EventHandler};
+use event::{AppEvent, ConnectionState, Event, EventHandler};
 use widgets::{
     accounts_tab::{AccountsTab, AccountsTabState},
     activity::ActivityMonitor,
@@ -68,6 +68,7 @@ pub struct Args {
 
 pub struct App {
     done: bool,
+    app_state: ConnectionState,
     should_show_help: bool,
     selected_tab: SelectedTab,
     chain: ChainState,
@@ -100,6 +101,7 @@ impl App {
                     AppEvent::BalanceUpdate((address, balance)) => {
                         self.handle_balance_update(address, balance)
                     }
+                    AppEvent::State(app_state) => self.app_state = app_state,
                 },
                 Event::Tick => self.handle_tick(),
             }
@@ -297,6 +299,7 @@ impl TryFrom<(Args, &Context)> for App {
             }),
             activity_monitor: ActivityMonitor::default(),
             done: false,
+            app_state: ConnectionState::Disconnected,
             should_show_help: false,
             chain: ChainState::default(),
             events: EventHandler::new(context.clone()),

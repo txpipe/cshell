@@ -60,7 +60,7 @@ impl Widget for ActivityMonitor {
                 }
 
                 (
-                    format!(" Activity | Updated {} seconds ago", seconds),
+                    format!("Chain Activity | Updated {} seconds ago", seconds),
                     match seconds {
                         i64::MIN..=20 => Color::Green,
                         21..=30 => Color::Yellow,
@@ -68,7 +68,7 @@ impl Widget for ActivityMonitor {
                     },
                 )
             }
-            None => (" Activity ".to_string(), Color::Green),
+            None => ("Chain Activity ".to_string(), Color::Green),
         };
 
         let sparkline = Sparkline::default()

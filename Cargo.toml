@@ -45,8 +45,12 @@ tracing-subscriber = "0.3.19"
 tx3-lang = "0.4.0"
 tx3-cardano = "0.4.0"
 url = { version = "2.5.0", features = ["serde"] }
-utxorpc = "0.10.0"
+
+# utxorpc = "0.10.0"
+# utxorpc = { path = "../../../utxorpc/rust-sdk" }
+utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
 regex = "1.11.1"
+backoff = "0.4.0"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
