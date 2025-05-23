@@ -2,11 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2025-05-23
+
+### 🚀 Features
+
+- Handle explorer connection state (#19)
+- Add sign & resolve utils to the tx command (#17)
+
 ## [0.5.1] - 2025-05-16
 
 ### 🐛 Bug Fixes
 
 - Adjusted cshell transaction to use tx3 lang version (#14)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.5.1
 
 ## [0.5.0] - 2025-05-14
 
