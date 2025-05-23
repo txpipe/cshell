@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use inquire::MultiSelect;
+use inquire::{Confirm, MultiSelect};
 use jsonrpsee::core::params::ObjectParams;
 use miette::{bail, Context, IntoDiagnostic};
 use serde_json::json;
@@ -168,9 +168,16 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
             };
 
             if wallet.is_unsafe && !args.r#unsafe {
-                bail!(
-                    "wallet '{signer}' is unsafe, use the param --unsafe to allow unsafe signatures"
-                )
+                let confirm = Confirm::new(&format!("wallet '{signer}' is unsafe, confirm sign?"))
+                    .with_default(false)
+                    .prompt()
+                    .unwrap_or_default();
+
+                if !confirm {
+                    bail!(
+                        "wallet '{signer}' is unsafe, use the param --unsafe to allow unsafe signatures"
+                    )
+                }
             }
 
             Ok(wallet)
