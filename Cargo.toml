@@ -1,6 +1,6 @@
 [package]
 name = "cshell"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.82.0"
 authors = ["TxPipe <hello@txpipe.io>"]
@@ -42,8 +42,13 @@ tokio-stream = "0.1.17"
 toml = "0.8.20"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-tx3-lang = "0.4.0"
-tx3-cardano = "0.4.0"
+
+tx3-lang = "0.5.0"
+tx3-cardano = "0.5.0"
+
+# tx3-lang = { git = "https://github.com/tx3-lang/tx3.git" }
+# tx3-cardano = { git = "https://github.com/tx3-lang/tx3.git" }
+
 url = { version = "2.5.0", features = ["serde"] }
 
 # utxorpc = "0.10.0"
