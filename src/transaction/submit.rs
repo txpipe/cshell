@@ -11,7 +11,10 @@ pub struct Args {
     cbor: String,
 
     /// Name of the provider to use. If undefined, will use default
-    #[arg(long, help = "Path for TX3 file describing transaction")]
+    #[arg(
+        long,
+        help = "Name of the provider to use. If undefined, will use default"
+    )]
     provider: Option<String>,
 }
 
