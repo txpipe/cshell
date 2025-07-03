@@ -52,7 +52,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
         .into_diagnostic()
         .context("parsing tx3 file")?;
 
-    let txs: Vec<String> = protocol.txs().map(|x| x.name.to_string()).collect();
+    let txs: Vec<String> = protocol.txs().map(|x| x.name.value.to_string()).collect();
 
     let template = match args.tx3_template {
         Some(template) => template,
