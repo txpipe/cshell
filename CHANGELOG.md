@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Update tx3 to v0.7.1 (#23)
+- Release cshell version 0.7.3
 
 ## [0.7.2] - 2025-07-04
 
