@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2025-07-07
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.7.4
+
 ## [0.7.3] - 2025-07-06
 
 ### ⚙️ Miscellaneous Tasks
