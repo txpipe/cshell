@@ -1,10 +1,12 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Flex, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Stylize},
     text::Line,
     widgets::{Block, Clear, Paragraph, Widget},
 };
+
+use super::centered_rect;
 
 #[derive(Clone)]
 pub struct HelpPopup {}
@@ -18,10 +20,8 @@ impl Widget for HelpPopup {
     where
         Self: Sized,
     {
-        let vertical = Layout::vertical([Constraint::Percentage(30)]).flex(Flex::Center);
-        let horizontal = Layout::horizontal([Constraint::Percentage(60)]).flex(Flex::Center);
-        let [area] = vertical.areas(area);
-        let [area] = horizontal.areas(area);
+        let popup_area = centered_rect(60, 30, area);
+
         let help = Paragraph::new(vec![
             Line::default(),
             Line::from("  q   : Quit CShell"),
@@ -37,16 +37,19 @@ impl Widget for HelpPopup {
             Line::default(),
             Line::from("Search"),
             Line::from("  f | / : Focus on filter"),
+            Line::from("Account"),
+            Line::from("  i     : Add a temp account address"),
         ])
         .style((Color::Black, Modifier::BOLD))
         .block(
             Block::bordered()
-                .title(Line::from("Help").style((Color::Black, Modifier::BOLD)))
+                .title(" Help | press ESC to go back ")
                 .padding(ratatui::widgets::Padding::horizontal(1))
                 .border_style(Color::Yellow)
                 .bg(Color::Yellow),
         );
-        Clear.render(area, buf);
-        help.render(area, buf);
+
+        Clear.render(popup_area, buf);
+        help.render(popup_area, buf);
     }
 }

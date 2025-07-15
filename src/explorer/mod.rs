@@ -25,19 +25,26 @@ pub mod widgets;
 
 use event::{AppEvent, ConnectionState, Event, EventHandler};
 use widgets::{
-    accounts_tab::{AccountsTab, AccountsTabState},
     activity::ActivityMonitor,
-    blocks_tab::{BlocksTab, BlocksTabState},
     footer::Footer,
     header::Header,
-    help::HelpPopup,
-    transactions_tab::{TransactionsTab, TransactionsTabState},
+    popups::{help::HelpPopup, new_address::NewViewAddress},
+    tabs::{
+        accounts::{AccountsTab, AccountsTabState},
+        blocks::{BlocksTab, BlocksTabState},
+        transactions::{TransactionsTab, TransactionsTabState},
+    },
 };
+
+#[derive(Parser)]
+pub struct Args {
+    #[arg(long, help = "Name of the provider to use")]
+    provider: Option<String>,
+}
 
 #[derive(Default)]
 pub struct ChainState {
     pub tip: Option<u64>,
-    pub balances: HashMap<String, DetailedBalance>,
     // TODO: add a capacity to not have problems with memory
     pub blocks: Rc<RefCell<VecDeque<ChainBlock>>>,
     pub last_block_seen: Option<DateTime<Utc>>,
@@ -62,17 +69,19 @@ pub enum SelectedTab {
     Transactions(TransactionsTab),
 }
 
-#[derive(Parser)]
-pub struct Args {
-    #[arg(long, help = "Name of the provider to use")]
-    provider: Option<String>,
+#[derive(Clone)]
+pub enum SelectedPopup {
+    Help(HelpPopup),
+    NewViewAddress(NewViewAddress),
 }
 
 pub struct App {
     done: bool,
     app_state: ConnectionState,
-    should_show_help: bool,
+
     selected_tab: SelectedTab,
+    selected_popup: Option<SelectedPopup>,
+
     chain: ChainState,
     accounts_tab_state: AccountsTabState,
     blocks_tab_state: BlocksTabState,
@@ -82,6 +91,25 @@ pub struct App {
     pub context: Arc<ExplorerContext>,
 }
 impl App {
+    pub fn new(context: Arc<ExplorerContext>) -> Self {
+        Self {
+            context: context.clone(),
+
+            selected_tab: SelectedTab::Accounts(AccountsTab::new(context.clone())),
+            selected_popup: None,
+
+            activity_monitor: ActivityMonitor::default(),
+            done: false,
+            app_state: ConnectionState::Disconnected,
+
+            chain: ChainState::default(),
+            events: EventHandler::new(context.clone()),
+            accounts_tab_state: AccountsTabState::default(),
+            blocks_tab_state: BlocksTabState::default(),
+            transactions_tab_state: TransactionsTabState::default(),
+        }
+    }
+
     /// Run the application's main loop.
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> miette::Result<()> {
         while !self.done {
@@ -93,7 +121,7 @@ impl App {
             match self.events.next().await? {
                 Event::Crossterm(event) => {
                     if let crossterm::event::Event::Key(key_event) = event {
-                        self.handle_key(key_event)
+                        self.handle_key(key_event).await
                     }
                 }
                 Event::App(app_event) => match app_event {
@@ -101,7 +129,7 @@ impl App {
                     AppEvent::NewTip(tip) => self.handle_new_tip(tip),
                     AppEvent::UndoTip(tip) => self.handle_undo_tip(tip),
                     AppEvent::BalanceUpdate((address, balance)) => {
-                        self.handle_balance_update(address, balance)
+                        self.handle_balance_update(address, balance).await
                     }
                     AppEvent::State(app_state) => self.app_state = app_state,
                 },
@@ -111,35 +139,52 @@ impl App {
         Ok(())
     }
 
-    fn handle_key(&mut self, key: KeyEvent) {
+    async fn handle_key(&mut self, key: KeyEvent) {
         if key.kind != KeyEventKind::Press {
             return;
         }
 
-        if !self.should_show_help {
+        if let Some(popup) = &mut self.selected_popup {
             match key.code {
-                KeyCode::Char('q') => {
-                    if self.should_show_help {
-                        self.should_show_help = false
+                KeyCode::Esc => {
+                    self.selected_popup = None;
+                    return;
+                }
+                _ => {}
+            }
+
+            match popup {
+                SelectedPopup::NewViewAddress(widget) => widget.handle_key(&key).await,
+                SelectedPopup::Help(_) => {}
+            }
+        } else {
+            match key.code {
+                KeyCode::Char('q') => self.done = true,
+                KeyCode::Tab | KeyCode::BackTab if self.selected_popup.is_none() => {
+                    if key.code == KeyCode::Tab {
+                        self.select_next_tab()
                     } else {
-                        self.done = true
+                        self.select_previous_tab()
                     }
                 }
-                KeyCode::Tab => self.select_next_tab(),
-                KeyCode::BackTab => self.select_previous_tab(),
-                KeyCode::Char('?') => self.should_show_help = true,
+                KeyCode::Char('?') => {
+                    self.selected_popup = Some(SelectedPopup::Help(HelpPopup::new()))
+                }
+
                 _ => {}
             }
 
             match self.selected_tab {
-                SelectedTab::Accounts(_) => self.accounts_tab_state.handle_key(&key),
+                SelectedTab::Accounts(_) => match key.code {
+                    KeyCode::Char('i') => {
+                        self.selected_popup = Some(SelectedPopup::NewViewAddress(
+                            NewViewAddress::new(self.context.clone()),
+                        ))
+                    }
+                    _ => self.accounts_tab_state.handle_key(&key),
+                },
                 SelectedTab::Blocks(_) => self.blocks_tab_state.handle_key(&key),
                 SelectedTab::Transactions(_) => self.transactions_tab_state.handle_key(&key),
-            }
-        } else {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => self.should_show_help = false,
-                _ => {}
             }
         }
     }
@@ -197,10 +242,17 @@ impl App {
         }
     }
 
-    fn handle_balance_update(&mut self, key: String, balance: DetailedBalance) {
-        self.chain.balances.insert(key, balance);
+    async fn handle_balance_update(&mut self, key: Address, balance: DetailedBalance) {
+        self.context
+            .wallets
+            .write()
+            .await
+            .entry(key)
+            .and_modify(|w| w.balance = balance);
         self.selected_tab = match &self.selected_tab {
-            SelectedTab::Accounts(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
+            SelectedTab::Accounts(_) => {
+                SelectedTab::Accounts(AccountsTab::new(self.context.clone()))
+            }
             x => x.clone(),
         }
     }
@@ -208,7 +260,7 @@ impl App {
     fn select_previous_tab(&mut self) {
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Accounts(_) => SelectedTab::Transactions(TransactionsTab::from(&*self)),
-            SelectedTab::Blocks(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
+            SelectedTab::Blocks(_) => SelectedTab::Accounts(AccountsTab::new(self.context.clone())),
             SelectedTab::Transactions(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
         }
     }
@@ -217,7 +269,9 @@ impl App {
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Accounts(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
             SelectedTab::Blocks(_) => SelectedTab::Transactions(TransactionsTab::from(&*self)),
-            SelectedTab::Transactions(_) => SelectedTab::Accounts(AccountsTab::from(&*self)),
+            SelectedTab::Transactions(_) => {
+                SelectedTab::Accounts(AccountsTab::new(self.context.clone()))
+            }
         }
     }
 
@@ -252,24 +306,38 @@ impl App {
                 &mut self.transactions_tab_state,
             ),
         }
-
         frame.render_widget(Footer::new(), footer_area);
 
-        if self.should_show_help {
-            frame.render_widget(HelpPopup::new(), frame.area());
+        if let Some(popup) = self.selected_popup.clone() {
+            match popup {
+                SelectedPopup::Help(widget) => frame.render_widget(widget, frame.area()),
+                SelectedPopup::NewViewAddress(widget) => frame.render_widget(widget, frame.area()),
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExplorerWallet {
+    pub name: Name,
+    pub balance: DetailedBalance,
+}
+impl ExplorerWallet {
+    pub fn new(name: Name) -> Self {
+        Self {
+            name,
+            balance: Default::default(),
         }
     }
 }
 
 pub struct ExplorerContext {
     pub provider: Provider,
-    pub wallets: RwLock<HashMap<Address, Name>>,
+    pub wallets: RwLock<HashMap<Address, ExplorerWallet>>,
 }
-impl TryFrom<(Args, &Context)> for ExplorerContext {
-    type Error = miette::Error;
-    fn try_from(value: (Args, &Context)) -> Result<Self, Self::Error> {
-        let (args, ctx) = value;
-        let provider = match args.provider {
+impl ExplorerContext {
+    pub fn new(args: &Args, ctx: &Context) -> miette::Result<Self> {
+        let provider = match &args.provider {
             Some(name) => match ctx.store.find_provider(&name) {
                 Some(provider) => provider.clone(),
                 None => bail!("Provider not found."),
@@ -287,39 +355,37 @@ impl TryFrom<(Args, &Context)> for ExplorerContext {
             ctx.store
                 .wallets()
                 .iter()
-                .map(|w| (w.address(provider.is_testnet()), w.name.clone()))
+                .map(|w| {
+                    (
+                        w.address(provider.is_testnet()),
+                        ExplorerWallet::new(w.name.clone()),
+                    )
+                })
                 .collect::<HashMap<_, _>>(),
         );
 
         Ok(Self { provider, wallets })
     }
-}
-impl TryFrom<(Args, &Context)> for App {
-    type Error = miette::Error;
-    fn try_from(value: (Args, &Context)) -> Result<Self, Self::Error> {
-        let context: Arc<ExplorerContext> = Arc::new(value.try_into()?);
-        Ok(Self {
-            context: context.clone(),
-            selected_tab: SelectedTab::Accounts(widgets::accounts_tab::AccountsTab {
-                context: context.clone(),
-                balances: Default::default(),
-            }),
-            activity_monitor: ActivityMonitor::default(),
-            done: false,
-            app_state: ConnectionState::Disconnected,
-            should_show_help: false,
-            chain: ChainState::default(),
-            events: EventHandler::new(context.clone()),
-            accounts_tab_state: AccountsTabState::default(),
-            blocks_tab_state: BlocksTabState::default(),
-            transactions_tab_state: TransactionsTabState::default(),
-        })
+
+    pub async fn insert_wallet(&self, address: Address, name: Name) {
+        let balance = self
+            .provider
+            .get_detailed_balance(&address)
+            .await
+            .unwrap_or_default();
+
+        let mut wallet = ExplorerWallet::new(name);
+        wallet.balance = balance;
+
+        self.wallets.write().await.insert(address.clone(), wallet);
     }
 }
 
 pub async fn run(args: Args, ctx: &Context) -> miette::Result<()> {
     let terminal = ratatui::init();
-    let app = App::try_from((args, ctx))?;
+
+    let context: Arc<ExplorerContext> = Arc::new(ExplorerContext::new(&args, ctx)?);
+    let app = App::new(context.clone());
     let result = app.run(terminal).await;
     ratatui::restore();
     result

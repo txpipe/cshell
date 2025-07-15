@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
@@ -10,8 +9,7 @@ use ratatui::widgets::{
     StatefulWidget, Table, TableState, Widget,
 };
 
-use crate::explorer::{App, ExplorerContext};
-use crate::types::DetailedBalance;
+use crate::explorer::{App, ExplorerContext, ExplorerWallet};
 use crate::utils::clip;
 
 #[derive(Default)]
@@ -57,14 +55,10 @@ impl AccountsTabState {
 #[derive(Clone)]
 pub struct AccountsTab {
     pub context: Arc<ExplorerContext>,
-    pub balances: HashMap<String, DetailedBalance>,
 }
-impl From<&App> for AccountsTab {
-    fn from(value: &App) -> Self {
-        Self {
-            context: value.context.clone(),
-            balances: value.chain.balances.clone(),
-        }
+impl AccountsTab {
+    pub fn new(context: Arc<ExplorerContext>) -> Self {
+        Self { context }
     }
 }
 
@@ -86,16 +80,16 @@ impl StatefulWidget for AccountsTab {
         let block = Block::bordered().title(Line::raw(" Accounts ").centered());
 
         let guard = tokio::task::block_in_place(|| self.context.wallets.blocking_read());
-        let wallets: Vec<(String, String)> = guard
+        let wallets: Vec<(String, ExplorerWallet)> = guard
             .iter()
-            .map(|(address, name)| (address.to_string(), name.to_string()))
+            .map(|(address, wallet)| (address.to_string(), wallet.clone()))
             .collect();
 
         let items: Vec<ListItem> = wallets
             .iter()
-            .map(|(address, name)| {
+            .map(|(address, wallet)| {
                 ListItem::new(vec![
-                    Line::styled(name, Color::Gray),
+                    Line::styled(wallet.name.to_string(), Color::Gray),
                     Line::styled(clip(address, 20), Color::DarkGray),
                 ])
             })
@@ -112,26 +106,25 @@ impl StatefulWidget for AccountsTab {
         // Handle details area:
         if let Some(i) = state.list_state.selected() {
             let index = i % wallets.len();
-            let (address, name) = wallets[index].clone();
+            let (address, wallet) = &wallets[index];
 
-            let balance = self.balances.get(&address);
             let mut details = vec![
                 Line::styled(
-                    format!("{} wallet", name),
+                    format!("{} wallet", wallet.name.to_string()),
                     (Color::White, Modifier::UNDERLINED),
                 ),
                 Line::styled(format!("Address: {}", &address), Color::White),
             ];
-            if let Some(balance) = balance {
-                let coin: u64 = balance
-                    .iter()
-                    .map(|utxo| utxo.coin.parse::<u64>().unwrap())
-                    .sum();
-                details.push(Line::styled(
-                    format!("Balance: {} Lovelace", coin),
-                    Color::White,
-                ));
-            }
+
+            let coin: u64 = wallet
+                .balance
+                .iter()
+                .map(|utxo| utxo.coin.parse::<u64>().unwrap())
+                .sum();
+            details.push(Line::styled(
+                format!("Balance: {} Lovelace", coin),
+                Color::White,
+            ));
 
             Block::bordered()
                 .title(" Details ")
@@ -146,7 +139,6 @@ impl StatefulWidget for AccountsTab {
                 .render(summary_area, buf);
 
             // UTXOs table
-            let Some(balance) = balance else { return };
             let header = ["Transaction", "Index", "Coin", "Assets", "Datum"]
                 .into_iter()
                 .map(Cell::from)
@@ -154,7 +146,7 @@ impl StatefulWidget for AccountsTab {
                 .style(Style::default().fg(Color::Green).bold())
                 .height(1);
 
-            let rows = balance.iter().map(|utxo| {
+            let rows = wallet.balance.iter().map(|utxo| {
                 Row::new(vec![
                     format!("\n{}\n", hex::encode(&utxo.tx)),
                     format!("\n{}\n", utxo.tx_index),

@@ -43,7 +43,7 @@ pub enum AppEvent {
     Reset(u64),
     NewTip(ChainBlock),
     UndoTip(ChainBlock),
-    BalanceUpdate((String, DetailedBalance)),
+    BalanceUpdate((Address, DetailedBalance)),
     State(ConnectionState),
 }
 
@@ -127,12 +127,12 @@ impl EventTask {
 
     async fn check_balances(
         &self,
-        balances: &mut HashMap<String, DetailedBalance>,
+        balances: &mut HashMap<Address, DetailedBalance>,
     ) -> miette::Result<()> {
         for (address, _) in self.context.wallets.read().await.iter() {
             let new = self.get_balance(address).await?;
-            let key = address.to_string();
-            match balances.get(&key) {
+            let key = address.clone();
+            match balances.get(address) {
                 Some(old) => {
                     if new != *old {
                         balances.insert(key.clone(), new.clone());
@@ -191,12 +191,12 @@ impl EventTask {
 
         for (address, _) in self.context.wallets.read().await.iter() {
             let value = self.get_balance(address).await?;
-            let key = address.to_string();
+            let address = address.clone();
             self.send(Event::App(AppEvent::BalanceUpdate((
-                key.clone(),
+                address.clone(),
                 value.clone(),
             ))))?;
-            balances.insert(key, value);
+            balances.insert(address, value);
         }
 
         let mut client: CardanoSyncClient = self.context.provider.client().await?;
