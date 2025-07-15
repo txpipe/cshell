@@ -94,9 +94,11 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
                             .iter()
                             .map(|x| x.name.to_string())
                             .collect();
-                        let wallet = inquire::Select::new(&format!("{}: ", &key), options)
+
+                        let wallet = inquire::Select::new(&key, options)
                             .prompt()
                             .into_diagnostic()?;
+
                         let address = ctx
                             .store
                             .wallets()
@@ -104,19 +106,77 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
                             .find(|x| x.name.to_string() == wallet)
                             .unwrap()
                             .address(provider.is_testnet());
+
                         argvalues
                             .insert(key, serde_json::Value::String(address.to_bech32().unwrap()));
                     }
                     tx3_lang::ir::Type::Int => {
-                        let value = inquire::Text::new(&format!("{}: ", &key))
+                        let value = inquire::Text::new(&key)
+                            .with_help_message("Enter an integer value")
                             .prompt()
                             .into_diagnostic()?
                             .parse::<u64>()
                             .into_diagnostic()
                             .context("invalid integer value")?;
+
                         argvalues.insert(key, serde_json::Value::Number(value.into()));
                     }
-                    _ => unimplemented!("tx3 arg type not implemented yet"),
+                    tx3_lang::ir::Type::Undefined => {
+                        let value = inquire::Text::new(&key)
+                            .with_help_message("Enter the value as json")
+                            .prompt()
+                            .into_diagnostic()?
+                            .parse::<serde_json::Value>()
+                            .into_diagnostic()
+                            .context("invalid json value")?;
+
+                        argvalues.insert(key, value);
+                    }
+                    tx3_lang::ir::Type::UtxoRef => {
+                        let value = inquire::Text::new(&key)
+                            .with_help_message("Enter the utxo reference as hash#idx")
+                            .prompt()
+                            .into_diagnostic()
+                            .context("invalid integer value")?;
+
+                        argvalues.insert(key, serde_json::Value::String(value));
+                    }
+                    tx3_lang::ir::Type::Unit => {
+                        argvalues.insert(key, serde_json::Value::Null);
+                    }
+                    tx3_lang::ir::Type::Bool => {
+                        let value = inquire::Confirm::new(&key).prompt().into_diagnostic()?;
+
+                        argvalues.insert(key, serde_json::Value::Bool(value));
+                    }
+                    tx3_lang::ir::Type::Bytes => {
+                        let value = inquire::Text::new(&key)
+                            .with_help_message("Enter the bytes as hex string")
+                            .prompt()
+                            .into_diagnostic()?;
+
+                        argvalues.insert(key, serde_json::Value::String(value));
+                    }
+                    tx3_lang::ir::Type::Utxo => {
+                        return Err(miette::miette!(
+                            "tx3 arg {key} is of type Utxo, not supported yet"
+                        ));
+                    }
+                    tx3_lang::ir::Type::AnyAsset => {
+                        return Err(miette::miette!(
+                            "tx3 arg {key} is of type AnyAsset, not supported yet"
+                        ));
+                    }
+                    tx3_lang::ir::Type::List => {
+                        return Err(miette::miette!(
+                            "tx3 arg {key} is of type List, not supported yet",
+                        ));
+                    }
+                    tx3_lang::ir::Type::Custom(x) => {
+                        return Err(miette::miette!(
+                            "tx3 arg {key} is a custom type {x}, not supported yet"
+                        ));
+                    }
                 };
             }
             argvalues
