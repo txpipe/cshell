@@ -129,6 +129,7 @@ impl Widget for NewViewAddress {
             .on_black()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
+            .border_style(Color::Green)
             .bg(Color::Black);
         block.render(popup_area, buf);
 

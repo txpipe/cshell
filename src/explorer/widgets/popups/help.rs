@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Stylize},
     text::Line,
-    widgets::{Block, Clear, Paragraph, Widget},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget},
 };
 
 use super::centered_rect;
@@ -39,15 +39,16 @@ impl Widget for HelpPopup {
             Line::from("  f | / : Focus on filter"),
             Line::default(),
             Line::from("Account"),
-            Line::from("  i     : Add a temp account address"),
+            Line::from("  i   : Add a temp account address"),
         ])
-        .style((Color::Black, Modifier::BOLD))
         .block(
             Block::bordered()
                 .title(" Help | press ESC to go back ")
                 .padding(ratatui::widgets::Padding::horizontal(1))
-                .border_style(Color::Yellow)
-                .bg(Color::Yellow),
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Color::Green)
+                .bg(Color::Black),
         );
 
         Clear.render(popup_area, buf);
