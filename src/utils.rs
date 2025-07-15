@@ -45,9 +45,9 @@ impl std::fmt::Display for Name {
 
 pub fn show_is_current(option: impl std::fmt::Display, is_current: bool) -> String {
     if is_current {
-        format!("{} (current)", option)
+        format!("{option} (current)")
     } else {
-        format!("{}", option)
+        format!("{option}")
     }
 }
 
@@ -103,7 +103,7 @@ pub fn clip(input: impl ToString, len: usize) -> String {
     let first_part: String = input.chars().take(first_half_len).collect();
     let last_part: String = input.chars().skip(input.len() - second_half_len).collect();
 
-    format!("{}...{}", first_part, last_part)
+    format!("{first_part}...{last_part}")
 }
 
 // Helper functions for serializing Option<Vec<u8>> as hex

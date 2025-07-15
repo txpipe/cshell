@@ -59,7 +59,7 @@ impl Widget for Header {
         let text = vec![
             Line::from(format!(" Provider: {} ", self.provider.name())),
             Line::from(format!(" Status..: {} ", self.app_state)),
-            Line::from(format!(" Tip.....: {} ", tip)),
+            Line::from(format!(" Tip.....: {tip} ")),
         ];
 
         let (color, style) = match self.app_state {

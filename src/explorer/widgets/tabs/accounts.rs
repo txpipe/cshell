@@ -122,7 +122,7 @@ impl StatefulWidget for AccountsTab {
                 .map(|utxo| utxo.coin.parse::<u64>().unwrap())
                 .sum();
             details.push(Line::styled(
-                format!("Balance: {} Lovelace", coin),
+                format!("Balance: {coin} Lovelace"),
                 Color::White,
             ));
 
