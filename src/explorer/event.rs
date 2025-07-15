@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
+use std::{fmt::Display, sync::Arc, time::Duration};
 
 use backoff::{backoff::Backoff, ExponentialBackoff};
 use futures::{FutureExt, StreamExt};
@@ -45,7 +45,6 @@ pub enum AppEvent {
     Reset(u64),
     NewTip(ChainBlock),
     UndoTip(ChainBlock),
-    BalanceUpdate((Address, DetailedBalance)),
     State(ConnectionState),
 }
 
@@ -123,29 +122,34 @@ impl EventTask {
             .context("sending event")
     }
 
+    async fn update_balance(&self, address: Address, balance: DetailedBalance) {
+        self.context
+            .wallets
+            .write()
+            .await
+            .entry(address)
+            .and_modify(|w| w.balance = balance);
+    }
+
     async fn get_balance(&self, address: &Address) -> miette::Result<DetailedBalance> {
         self.context.provider.get_detailed_balance(address).await
     }
 
-    async fn check_balances(
-        &self,
-        balances: &mut HashMap<Address, DetailedBalance>,
-    ) -> miette::Result<()> {
-        for (address, _) in self.context.wallets.read().await.iter() {
-            let new = self.get_balance(address).await?;
-            let key = address.clone();
-            match balances.get(address) {
-                Some(old) => {
-                    if new != *old {
-                        balances.insert(key.clone(), new.clone());
-                        self.send(Event::App(AppEvent::BalanceUpdate((key, new))))?;
-                    }
-                }
-                None => {
-                    balances.insert(key.clone(), new.clone());
-                    self.send(Event::App(AppEvent::BalanceUpdate((key, new))))?;
-                }
-            };
+    async fn check_balances(&self) -> miette::Result<()> {
+        let items: Vec<(Address, DetailedBalance)> = {
+            let wallets = self.context.wallets.read().await;
+            wallets
+                .iter()
+                .map(|(addr, wallet)| (addr.clone(), wallet.balance.clone()))
+                .collect()
+        };
+
+        for (address, old_balance) in items {
+            let new_balance = self.get_balance(&address).await?;
+
+            if new_balance != old_balance {
+                self.update_balance(address.clone(), new_balance).await;
+            }
         }
 
         Ok(())
@@ -191,16 +195,13 @@ impl EventTask {
     }
 
     async fn follow_tip(&self) -> miette::Result<()> {
-        let mut balances = HashMap::new();
-
-        for (address, _) in self.context.wallets.read().await.iter() {
-            let value = self.get_balance(address).await?;
-            let address = address.clone();
-            self.send(Event::App(AppEvent::BalanceUpdate((
-                address.clone(),
-                value.clone(),
-            ))))?;
-            balances.insert(address, value);
+        let addresses: Vec<Address> = {
+            let wallets = self.context.wallets.read().await;
+            wallets.keys().cloned().collect()
+        };
+        for address in addresses {
+            let value = self.get_balance(&address).await?;
+            self.update_balance(address.clone(), value.clone()).await;
         }
 
         let mut client: CardanoSyncClient = self.context.provider.client().await?;
@@ -224,7 +225,7 @@ impl EventTask {
                     };
 
                     self.send(Event::App(AppEvent::NewTip(chainblock)))?;
-                    self.check_balances(&mut balances).await?;
+                    self.check_balances().await?;
                 }
                 TipEvent::Undo(block) => {
                     let header = block.parsed.clone().unwrap().header.unwrap();
@@ -239,11 +240,11 @@ impl EventTask {
                     };
 
                     self.send(Event::App(AppEvent::UndoTip(chainblock)))?;
-                    self.check_balances(&mut balances).await?;
+                    self.check_balances().await?;
                 }
                 TipEvent::Reset(point) => {
                     self.send(Event::App(AppEvent::Reset(point.index)))?;
-                    self.check_balances(&mut balances).await?;
+                    self.check_balances().await?;
                 }
             }
         }

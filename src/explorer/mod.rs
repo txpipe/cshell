@@ -128,9 +128,6 @@ impl App {
                     AppEvent::Reset(tip) => self.handle_reset(tip),
                     AppEvent::NewTip(tip) => self.handle_new_tip(tip),
                     AppEvent::UndoTip(tip) => self.handle_undo_tip(tip),
-                    AppEvent::BalanceUpdate((address, balance)) => {
-                        self.handle_balance_update(address, balance).await
-                    }
                     AppEvent::State(app_state) => self.app_state = app_state,
                 },
                 Event::Tick => self.handle_tick(),
@@ -235,21 +232,6 @@ impl App {
 
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Blocks(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
-            x => x.clone(),
-        }
-    }
-
-    async fn handle_balance_update(&mut self, key: Address, balance: DetailedBalance) {
-        self.context
-            .wallets
-            .write()
-            .await
-            .entry(key)
-            .and_modify(|w| w.balance = balance);
-        self.selected_tab = match &self.selected_tab {
-            SelectedTab::Accounts(_) => {
-                SelectedTab::Accounts(AccountsTab::new(self.context.clone()))
-            }
             x => x.clone(),
         }
     }
