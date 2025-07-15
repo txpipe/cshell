@@ -20,7 +20,7 @@ impl Widget for HelpPopup {
     where
         Self: Sized,
     {
-        let popup_area = centered_rect(60, 30, area);
+        let popup_area = centered_rect(60, 35, area);
 
         let help = Paragraph::new(vec![
             Line::default(),
@@ -37,6 +37,7 @@ impl Widget for HelpPopup {
             Line::default(),
             Line::from("Search"),
             Line::from("  f | / : Focus on filter"),
+            Line::default(),
             Line::from("Account"),
             Line::from("  i     : Add a temp account address"),
         ])
