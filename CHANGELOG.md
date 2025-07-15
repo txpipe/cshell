@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2025-07-15
+
+### 🐛 Bug Fixes
+
+- *(tx3)* Support more argument types (#30)
+
+## [0.8.0] - 2025-07-11
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.8.0
+
 ## [0.7.4] - 2025-07-07
 
 ### ⚙️ Miscellaneous Tasks

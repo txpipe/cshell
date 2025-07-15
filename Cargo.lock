@@ -589,7 +589,7 @@ checksum = "382ce8820a5bb815055d3553a610e8cb542b2d767bbacea99038afda96cd760d"
 
 [[package]]
 name = "cshell"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "backoff",
  "bech32",
