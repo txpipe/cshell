@@ -9,7 +9,7 @@ use ratatui::widgets::{
     StatefulWidget, Table, TableState, Widget,
 };
 
-use crate::explorer::{App, ExplorerContext, ExplorerWallet};
+use crate::explorer::{ExplorerContext, ExplorerWallet};
 use crate::utils::clip;
 
 #[derive(Default)]
@@ -110,7 +110,7 @@ impl StatefulWidget for AccountsTab {
 
             let mut details = vec![
                 Line::styled(
-                    format!("{} wallet", wallet.name.to_string()),
+                    format!("{} wallet", wallet.name),
                     (Color::White, Modifier::UNDERLINED),
                 ),
                 Line::styled(format!("Address: {}", &address), Color::White),

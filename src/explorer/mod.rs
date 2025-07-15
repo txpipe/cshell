@@ -145,12 +145,9 @@ impl App {
         }
 
         if let Some(popup) = &mut self.selected_popup {
-            match key.code {
-                KeyCode::Esc => {
-                    self.selected_popup = None;
-                    return;
-                }
-                _ => {}
+            if key.code == KeyCode::Esc {
+                self.selected_popup = None;
+                return;
             }
 
             match popup {
@@ -338,7 +335,7 @@ pub struct ExplorerContext {
 impl ExplorerContext {
     pub fn new(args: &Args, ctx: &Context) -> miette::Result<Self> {
         let provider = match &args.provider {
-            Some(name) => match ctx.store.find_provider(&name) {
+            Some(name) => match ctx.store.find_provider(name) {
                 Some(provider) => provider.clone(),
                 None => bail!("Provider not found."),
             },
