@@ -1,12 +1,8 @@
-use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use clap::Parser;
+use indexmap::IndexMap;
 use miette::{bail, Context as _, IntoDiagnostic};
 use pallas::ledger::addresses::Address;
 use ratatui::{
@@ -312,7 +308,7 @@ impl ExplorerWallet {
 
 pub struct ExplorerContext {
     pub provider: Provider,
-    pub wallets: RwLock<HashMap<Address, ExplorerWallet>>,
+    pub wallets: RwLock<IndexMap<Address, ExplorerWallet>>,
 }
 impl ExplorerContext {
     pub fn new(args: &Args, ctx: &Context) -> miette::Result<Self> {
@@ -340,7 +336,7 @@ impl ExplorerContext {
                         ExplorerWallet::new(w.name.clone()),
                     )
                 })
-                .collect::<HashMap<_, _>>(),
+                .collect::<IndexMap<_, _>>(),
         );
 
         Ok(Self { provider, wallets })
