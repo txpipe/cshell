@@ -8,15 +8,17 @@ use std::{
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use miette::{bail, Context as _, IntoDiagnostic};
+use pallas::ledger::addresses::Address;
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind},
     layout::{Constraint, Layout},
     DefaultTerminal, Frame,
 };
 use strum::Display;
+use tokio::sync::RwLock;
 use utxorpc::spec::cardano::BlockBody;
 
-use crate::{provider::types::Provider, store::Store, types::DetailedBalance, Context};
+use crate::{provider::types::Provider, types::DetailedBalance, utils::Name, Context};
 
 pub mod event;
 pub mod widgets;
@@ -260,8 +262,8 @@ impl App {
 }
 
 pub struct ExplorerContext {
-    pub store: Store,
     pub provider: Provider,
+    pub wallets: RwLock<HashMap<Address, Name>>,
 }
 impl TryFrom<(Args, &Context)> for ExplorerContext {
     type Error = miette::Error;
@@ -281,10 +283,15 @@ impl TryFrom<(Args, &Context)> for ExplorerContext {
             },
         };
 
-        Ok(Self {
-            store: ctx.store.clone(),
-            provider,
-        })
+        let wallets = RwLock::new(
+            ctx.store
+                .wallets()
+                .iter()
+                .map(|w| (w.address(provider.is_testnet()), w.name.clone()))
+                .collect::<HashMap<_, _>>(),
+        );
+
+        Ok(Self { provider, wallets })
     }
 }
 impl TryFrom<(Args, &Context)> for App {

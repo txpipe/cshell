@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
 use backoff::{backoff::Backoff, ExponentialBackoff};
 use futures::{FutureExt, StreamExt};
 use miette::{Context, IntoDiagnostic};
+use pallas::ledger::addresses::Address;
 use ratatui::crossterm::event::Event as CrosstermEvent;
 use tokio::{
     sync::{mpsc, RwLock},
@@ -10,7 +11,7 @@ use tokio::{
 };
 use utxorpc::{CardanoSyncClient, TipEvent};
 
-use crate::{types::DetailedBalance, wallet::types::Wallet};
+use crate::types::DetailedBalance;
 
 use super::{ChainBlock, ExplorerContext};
 
@@ -120,22 +121,17 @@ impl EventTask {
             .context("sending event")
     }
 
-    async fn get_balance(&self, wallet: &Wallet) -> miette::Result<DetailedBalance> {
-        self.context
-            .provider
-            .get_detailed_balance(&wallet.address(self.context.provider.is_testnet()))
-            .await
+    async fn get_balance(&self, address: &Address) -> miette::Result<DetailedBalance> {
+        self.context.provider.get_detailed_balance(address).await
     }
 
     async fn check_balances(
         &self,
         balances: &mut HashMap<String, DetailedBalance>,
     ) -> miette::Result<()> {
-        for wallet in self.context.store.wallets() {
-            let key = wallet
-                .address(self.context.provider.is_testnet())
-                .to_string();
-            let new = self.get_balance(wallet).await?;
+        for (address, _) in self.context.wallets.read().await.iter() {
+            let new = self.get_balance(address).await?;
+            let key = address.to_string();
             match balances.get(&key) {
                 Some(old) => {
                     if new != *old {
@@ -193,11 +189,9 @@ impl EventTask {
     async fn follow_tip(&self) -> miette::Result<()> {
         let mut balances = HashMap::new();
 
-        for wallet in self.context.store.wallets() {
-            let key = wallet
-                .address(self.context.provider.is_testnet())
-                .to_string();
-            let value = self.get_balance(wallet).await?;
+        for (address, _) in self.context.wallets.read().await.iter() {
+            let value = self.get_balance(address).await?;
+            let key = address.to_string();
             self.send(Event::App(AppEvent::BalanceUpdate((
                 key.clone(),
                 value.clone(),

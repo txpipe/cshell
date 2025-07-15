@@ -85,18 +85,18 @@ impl StatefulWidget for AccountsTab {
 
         let block = Block::bordered().title(Line::raw(" Accounts ").centered());
 
-        let items: Vec<ListItem> = self
-            .context
-            .store
-            .wallets()
+        let guard = tokio::task::block_in_place(|| self.context.wallets.blocking_read());
+        let wallets: Vec<(String, String)> = guard
             .iter()
-            .map(|wallet| {
+            .map(|(address, name)| (address.to_string(), name.to_string()))
+            .collect();
+
+        let items: Vec<ListItem> = wallets
+            .iter()
+            .map(|(address, name)| {
                 ListItem::new(vec![
-                    Line::styled(wallet.name.to_string(), Color::Gray),
-                    Line::styled(
-                        clip(wallet.address(self.context.provider.is_testnet()), 20),
-                        Color::DarkGray,
-                    ),
+                    Line::styled(name, Color::Gray),
+                    Line::styled(clip(address, 20), Color::DarkGray),
                 ])
             })
             .collect();
@@ -111,19 +111,16 @@ impl StatefulWidget for AccountsTab {
 
         // Handle details area:
         if let Some(i) = state.list_state.selected() {
-            let wallet =
-                self.context.store.wallets()[i % self.context.store.wallets().len()].clone();
-            let key = wallet
-                .address(self.context.provider.is_testnet())
-                .to_string();
+            let index = i % wallets.len();
+            let (address, name) = wallets[index].clone();
 
-            let balance = self.balances.get(&key);
+            let balance = self.balances.get(&address);
             let mut details = vec![
                 Line::styled(
-                    format!("{} wallet", wallet.name),
+                    format!("{} wallet", name),
                     (Color::White, Modifier::UNDERLINED),
                 ),
-                Line::styled(format!("Address: {}", &key), Color::White),
+                Line::styled(format!("Address: {}", &address), Color::White),
             ];
             if let Some(balance) = balance {
                 let coin: u64 = balance
