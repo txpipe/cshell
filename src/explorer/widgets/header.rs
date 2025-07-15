@@ -64,7 +64,9 @@ impl Widget for Header {
 
         let (color, style) = match self.app_state {
             ConnectionState::Connected => (Color::Blue, Style::new().blue()),
-            ConnectionState::Retrying => (Color::Yellow, Style::new().yellow()),
+            ConnectionState::Retrying | ConnectionState::Connecting => {
+                (Color::Yellow, Style::new().yellow())
+            }
             ConnectionState::Disconnected => (Color::Red, Style::new().red()),
         };
 

@@ -24,6 +24,7 @@ pub enum Event {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConnectionState {
+    Connecting,
     Connected,
     Retrying,
     Disconnected,
@@ -31,6 +32,7 @@ pub enum ConnectionState {
 impl Display for ConnectionState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ConnectionState::Connecting => write!(f, "connecting"),
             ConnectionState::Connected => write!(f, "connected"),
             ConnectionState::Retrying => write!(f, "retrying"),
             ConnectionState::Disconnected => write!(f, "disconnected"),
@@ -155,6 +157,8 @@ impl EventTask {
     }
 
     async fn run_follow_tip(&self) -> miette::Result<()> {
+        self.update_connection(ConnectionState::Connecting).await?;
+
         let max_elapsed_time = Duration::from_secs(60 * 5);
 
         let mut backoff = ExponentialBackoff {
