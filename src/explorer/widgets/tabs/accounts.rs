@@ -10,7 +10,7 @@ use ratatui::widgets::{
 };
 
 use crate::explorer::{ExplorerContext, ExplorerWallet};
-use crate::utils::clip;
+use crate::utils::{clip, AdaFormat};
 
 #[derive(Default)]
 pub struct AccountsTabState {
@@ -121,10 +121,9 @@ impl StatefulWidget for AccountsTab {
                 .iter()
                 .map(|utxo| utxo.coin.parse::<u64>().unwrap())
                 .sum();
-            details.push(Line::styled(
-                format!("Balance: {coin} Lovelace"),
-                Color::White,
-            ));
+            let coin = coin.format_ada();
+
+            details.push(Line::styled(format!("Balance: {coin}"), Color::White));
 
             Block::bordered()
                 .title(" Details ")
@@ -139,7 +138,7 @@ impl StatefulWidget for AccountsTab {
                 .render(summary_area, buf);
 
             // UTXOs table
-            let header = ["Transaction", "Index", "Coin", "Assets", "Datum"]
+            let header = ["Utxo Ref", "Coin", "Assets", "Datum"]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
@@ -147,10 +146,15 @@ impl StatefulWidget for AccountsTab {
                 .height(1);
 
             let rows = wallet.balance.iter().map(|utxo| {
+                let coin = utxo
+                    .coin
+                    .parse::<u64>()
+                    .map(|v| v.format_ada())
+                    .unwrap_or(utxo.coin.clone());
+
                 Row::new(vec![
-                    format!("\n{}\n", hex::encode(&utxo.tx)),
-                    format!("\n{}\n", utxo.tx_index),
-                    format!("\n{}\n", utxo.coin),
+                    format!("\n{}#{}\n", hex::encode(&utxo.tx), utxo.tx_index),
+                    format!("\n{coin}\n"),
                     format!("\n{}\n", utxo.assets.len()),
                     format!(
                         "\n{}\n",
@@ -168,8 +172,7 @@ impl StatefulWidget for AccountsTab {
                 rows,
                 [
                     Constraint::Length(70),
-                    Constraint::Length(6),
-                    Constraint::Length(20),
+                    Constraint::Length(25),
                     Constraint::Length(8),
                     Constraint::Fill(1),
                 ],

@@ -15,7 +15,10 @@ use ratatui::{
 use regex::Regex;
 use utxorpc::spec::cardano::{self, certificate::Certificate, stake_credential, Tx};
 
-use crate::explorer::{App, ChainBlock};
+use crate::{
+    explorer::{App, ChainBlock},
+    utils::AdaFormat,
+};
 
 #[derive(Default)]
 pub struct TransactionsTabState {
@@ -238,7 +241,7 @@ impl StatefulWidget for TransactionsTab {
                         format!("\n{}\n", tx.block_slot),
                         format!("\n{}\n", tx.certs),
                         format!("\n{}\n", tx.assets),
-                        format!("\n{}\n", tx.amount_ada),
+                        format!("\n{}\n", tx.amount_ada.format_ada()),
                         format!("\n{}\n", if tx.datum { "yes" } else { "no" }),
                     ])
                     .style(Style::new().fg(Color::White).bg(color))
@@ -252,7 +255,7 @@ impl StatefulWidget for TransactionsTab {
                         Constraint::Length(12),
                         Constraint::Length(12),
                         Constraint::Length(12),
-                        Constraint::Length(12),
+                        Constraint::Length(25),
                         Constraint::Length(12),
                     ],
                 )

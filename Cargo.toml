@@ -56,6 +56,7 @@ utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
 regex = "1.11.1"
 backoff = "0.4.0"
 indexmap = "2.10.0"
+num-format = "0.4.4"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
