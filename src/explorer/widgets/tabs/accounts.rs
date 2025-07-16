@@ -139,7 +139,7 @@ impl StatefulWidget for AccountsTab {
                 .render(summary_area, buf);
 
             // UTXOs table
-            let header = ["Transaction", "Index", "Coin", "Assets", "Datum"]
+            let header = ["Utxo Ref", "Coin", "Assets", "Datum"]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
@@ -148,8 +148,7 @@ impl StatefulWidget for AccountsTab {
 
             let rows = wallet.balance.iter().map(|utxo| {
                 Row::new(vec![
-                    format!("\n{}\n", hex::encode(&utxo.tx)),
-                    format!("\n{}\n", utxo.tx_index),
+                    format!("\n{}#{}\n", hex::encode(&utxo.tx), utxo.tx_index),
                     format!("\n{}\n", utxo.coin),
                     format!("\n{}\n", utxo.assets.len()),
                     format!(
@@ -168,8 +167,7 @@ impl StatefulWidget for AccountsTab {
                 rows,
                 [
                     Constraint::Length(70),
-                    Constraint::Length(6),
-                    Constraint::Length(20),
+                    Constraint::Length(14),
                     Constraint::Length(8),
                     Constraint::Fill(1),
                 ],
