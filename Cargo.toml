@@ -1,6 +1,6 @@
 [package]
 name = "cshell"
-version = "0.8.1"
+version = "0.9.0"
 edition = "2021"
 rust-version = "1.82.0"
 authors = ["TxPipe <hello@txpipe.io>"]

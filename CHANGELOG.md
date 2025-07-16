@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2025-07-16
+
+### 🚀 Features
+
+- Implement ad-hoc address view (#32)
+
 ## [0.8.1] - 2025-07-15
 
 ### 🐛 Bug Fixes
 
 - *(tx3)* Support more argument types (#30)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.8.1
 
 ## [0.8.0] - 2025-07-11
 
