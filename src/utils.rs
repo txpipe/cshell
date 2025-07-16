@@ -57,7 +57,7 @@ impl AdaFormat for u64 {
         let whole_str = whole.to_formatted_string(&Locale::en);
         let fraction_str = format!("{:0width$}", fraction, width = decimals as usize);
 
-        format!("{}.{}", whole_str, fraction_str)
+        format!("{whole_str}.{fraction_str}")
     }
 }
 
