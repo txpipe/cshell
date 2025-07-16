@@ -285,7 +285,7 @@ impl OutputFormatter for Provider {
             },
         ]);
 
-        println!("{}", table);
+        println!("{table}");
     }
 
     fn to_json(&self) {
@@ -307,7 +307,7 @@ impl OutputFormatter for &Vec<Provider> {
                 },
             ]);
         }
-        println!("{}", table);
+        println!("{table}");
     }
 
     fn to_json(&self) {

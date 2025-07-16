@@ -60,7 +60,7 @@ impl Widget for ActivityMonitor {
                 }
 
                 (
-                    format!("Chain Activity | Updated {} seconds ago", seconds),
+                    format!("Chain Activity | Updated {seconds} seconds ago"),
                     match seconds {
                         i64::MIN..=20 => Color::Green,
                         21..=30 => Color::Yellow,
