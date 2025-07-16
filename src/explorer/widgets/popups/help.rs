@@ -20,7 +20,8 @@ impl Widget for HelpPopup {
     where
         Self: Sized,
     {
-        let popup_area = centered_rect(60, 35, area);
+        let popup_area = centered_rect(60, 20, area);
+        Clear.render(popup_area, buf);
 
         let help = Paragraph::new(vec![
             Line::default(),
@@ -29,11 +30,11 @@ impl Widget for HelpPopup {
             Line::from("  ?   : Show this help"),
             Line::default(),
             Line::from("Navigation"),
-            Line::from("  Tab | shift + Tab     : Scroll through tabs"),
-            Line::from("  j | \u{1F883}         : Scroll down"),
-            Line::from("  k | \u{1F881}         : Scroll up"),
-            Line::from("  j | \u{1F883} + Shift : Scroll to bottom"),
-            Line::from("  k | \u{1F881} + Shift : Scroll to top"),
+            Line::from("  Tab | Shift + Tab : Scroll through tabs"),
+            Line::from("  j   | \u{1F883}           : Scroll down"),
+            Line::from("  k   | \u{1F881}           : Scroll up"),
+            Line::from("  j   | \u{1F883}   + Shift : Scroll to bottom"),
+            Line::from("  k   | \u{1F881}   + Shift : Scroll to top"),
             Line::default(),
             Line::from("Search"),
             Line::from("  f | / : Focus on filter"),
@@ -51,7 +52,6 @@ impl Widget for HelpPopup {
                 .bg(Color::Black),
         );
 
-        Clear.render(popup_area, buf);
         help.render(popup_area, buf);
     }
 }
