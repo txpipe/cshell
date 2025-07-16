@@ -10,7 +10,7 @@ use ratatui::widgets::{
 };
 
 use crate::explorer::{ExplorerContext, ExplorerWallet};
-use crate::utils::clip;
+use crate::utils::{clip, AdaFormat};
 
 #[derive(Default)]
 pub struct AccountsTabState {
@@ -121,10 +121,9 @@ impl StatefulWidget for AccountsTab {
                 .iter()
                 .map(|utxo| utxo.coin.parse::<u64>().unwrap())
                 .sum();
-            details.push(Line::styled(
-                format!("Balance: {coin} Lovelace"),
-                Color::White,
-            ));
+            let coin = coin.format_ada();
+
+            details.push(Line::styled(format!("Balance: {coin}"), Color::White));
 
             Block::bordered()
                 .title(" Details ")
@@ -147,9 +146,15 @@ impl StatefulWidget for AccountsTab {
                 .height(1);
 
             let rows = wallet.balance.iter().map(|utxo| {
+                let coin = utxo
+                    .coin
+                    .parse::<u64>()
+                    .map(|v| v.format_ada())
+                    .unwrap_or(utxo.coin.clone());
+
                 Row::new(vec![
                     format!("\n{}#{}\n", hex::encode(&utxo.tx), utxo.tx_index),
-                    format!("\n{}\n", utxo.coin),
+                    format!("\n{coin}\n"),
                     format!("\n{}\n", utxo.assets.len()),
                     format!(
                         "\n{}\n",
@@ -167,7 +172,7 @@ impl StatefulWidget for AccountsTab {
                 rows,
                 [
                     Constraint::Length(70),
-                    Constraint::Length(14),
+                    Constraint::Length(25),
                     Constraint::Length(8),
                     Constraint::Fill(1),
                 ],
