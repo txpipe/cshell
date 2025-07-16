@@ -23,7 +23,7 @@ fn get_last_slots(data: Rc<RefCell<VecDeque<ChainBlock>>>, size: usize) -> Vec<u
     for item in last_blocks {
         if item.slot <= max_slot && item.slot > min_slot {
             let index = (max_slot - item.slot) as usize;
-            result[size - 1 - index] = item.tx_count as u64 + 1;
+            result[size - 1 - index] = item.tx_count as u64;
         }
     }
 
