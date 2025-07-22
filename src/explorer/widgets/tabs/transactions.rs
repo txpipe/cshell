@@ -22,9 +22,8 @@ use crate::explorer::{App, ChainBlock};
 pub struct TransactionsTabState {
     scroll_state: ScrollbarState,
     table_state: TableState,
-    input: String,
+    search_input: String,
     input_mode: InputMode,
-    character_index: usize,
     view_mode: ViewMode,
     tx_selected: Option<TxView>,
     detail_state: TransactionsDetailState,
@@ -42,30 +41,28 @@ impl TransactionsTabState {
                         self.input_mode = InputMode::Editing
                     }
                     (KeyCode::Esc, _) => {
-                        if !self.input.is_empty() {
-                            self.input.clear()
+                        if !self.search_input.is_empty() {
+                            self.search_input.clear()
                         }
                     }
                     (KeyCode::Enter, _) => {
                         if self.table_state.selected().is_some() {
                             self.view_mode = ViewMode::Detail;
                             self.tx_selected = None;
-                            // self.detail_state.vertical_offset = 0;
                         }
                     }
                     _ => {}
                 },
                 InputMode::Editing => match key.code {
-                    KeyCode::Char(to_insert) => self.search_enter_char(to_insert),
+                    KeyCode::Char(c) => self.search_input.push(c),
+                    KeyCode::Backspace => {
+                        self.search_input.pop();
+                    }
                     KeyCode::Esc => self.input_mode = InputMode::Normal,
-                    KeyCode::Backspace => self.search_delete_char(),
                     KeyCode::Enter => {
-                        if !self.input.is_empty() {
-                            self.table_state.select_first();
-                        }
+                        self.table_state.select_first();
                         self.input_mode = InputMode::Normal
                     }
-
                     _ => {}
                 },
             },
@@ -109,46 +106,6 @@ impl TransactionsTabState {
         if let Some(i) = self.table_state.selected() {
             self.scroll_state = self.scroll_state.position(i);
         }
-    }
-
-    fn search_enter_char(&mut self, new_char: char) {
-        let index = self
-            .input
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(self.character_index)
-            .unwrap_or(self.input.len());
-
-        self.input.insert(index, new_char);
-        self.search_move_cursor_right();
-    }
-
-    fn search_delete_char(&mut self) {
-        let is_not_cursor_leftmost = self.character_index != 0;
-        if is_not_cursor_leftmost {
-            let current_index = self.character_index;
-            let from_left_to_current_index = current_index - 1;
-
-            let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
-            let after_char_to_delete = self.input.chars().skip(current_index);
-
-            self.input = before_char_to_delete.chain(after_char_to_delete).collect();
-            self.search_move_cursor_left();
-        }
-    }
-
-    fn search_move_cursor_left(&mut self) {
-        let cursor_moved_left = self.character_index.saturating_sub(1);
-        self.character_index = self.search_clamp_cursor(cursor_moved_left);
-    }
-
-    fn search_move_cursor_right(&mut self) {
-        let cursor_moved_right = self.character_index.saturating_add(1);
-        self.character_index = self.search_clamp_cursor(cursor_moved_right);
-    }
-
-    fn search_clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.input.chars().count())
     }
 }
 
@@ -195,14 +152,14 @@ impl StatefulWidget for TransactionsTab {
                     Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).areas(area);
 
                 let input = match state.input_mode {
-                    InputMode::Normal => Paragraph::new(state.input.as_str())
+                    InputMode::Normal => Paragraph::new(state.search_input.as_str())
                         .style(Style::default().fg(Color::DarkGray))
                         .block(
                             Block::bordered()
                                 .title(" Search | press f to filter ")
                                 .border_style(Style::new().dark_gray()),
                         ),
-                    InputMode::Editing => Paragraph::new(state.input.as_str())
+                    InputMode::Editing => Paragraph::new(format!("{}│", state.search_input))
                         .style(Style::default().fg(Color::White))
                         .block(
                             Block::bordered()
@@ -220,8 +177,8 @@ impl StatefulWidget for TransactionsTab {
                     .height(1);
                 let mut txs: Vec<TxView> =
                     self.blocks.borrow().iter().flat_map(TxView::new).collect();
-                if !state.input.is_empty() {
-                    let input_regex = Regex::new(&state.input).unwrap();
+                if !state.search_input.is_empty() {
+                    let input_regex = Regex::new(&state.search_input).unwrap();
 
                     txs.retain(|tx| {
                         input_regex.is_match(&tx.hash)
