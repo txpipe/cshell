@@ -56,6 +56,7 @@ impl TransactionsTabState {
                     (KeyCode::Enter, _) => {
                         if self.table_state.selected().is_some() {
                             self.detail_state.tree_state.close_all();
+                            self.detail_state.tree_state.select_first();
                             self.view_mode = ViewMode::Detail;
                             self.tx_selected = None;
                         }
