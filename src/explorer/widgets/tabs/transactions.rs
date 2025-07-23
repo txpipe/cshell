@@ -305,7 +305,7 @@ impl TransactionsDetail {
         let tx_hash = hex::encode(&tx.hash);
 
         let mut root = vec![
-            TreeItem::new_leaf("tx_hash_info".to_string(), format!("Hash: {}", tx_hash)),
+            TreeItem::new_leaf("tx_hash_info".to_string(), format!("Hash: {tx_hash}")),
             TreeItem::new_leaf("tx_fee_info".to_string(), format!("Fee: {}", tx.fee)),
         ];
 
@@ -335,8 +335,7 @@ impl TransactionsDetail {
             tx.inputs
                 .iter()
                 .enumerate()
-                .map(|(i, input)| map_tx_input(input, &i.to_string(), &tx_hash))
-                .flatten()
+                .flat_map(|(i, input)| map_tx_input(input, &i.to_string(), &tx_hash))
                 .collect(),
         )
         .expect("Failed to create inputs node");
@@ -363,8 +362,7 @@ impl TransactionsDetail {
                 tx.reference_inputs
                     .iter()
                     .enumerate()
-                    .map(|(i, input)| map_tx_input(input, &format!("reference_{i}"), &tx_hash))
-                    .flatten()
+                    .flat_map(|(i, input)| map_tx_input(input, &format!("reference_{i}"), &tx_hash))
                     .collect(),
             )
             .expect("Failed to create reference inputs node");
@@ -390,7 +388,7 @@ impl TransactionsDetail {
                                     .unwrap_or(" - ".to_string());
                                 TreeItem::new(
                                     format!("mint_asset_{policy_id}_{i}_{j}"),
-                                    format!("Asset: {}", name),
+                                    format!("Asset: {name}"),
                                     vec![
                                         TreeItem::new_leaf(
                                             format!("mint_asset_mintcoin_{policy_id}_{i}_{j}"),
@@ -408,7 +406,7 @@ impl TransactionsDetail {
                         children.extend(map_redeemer(&mint.redeemer, &format!("mint_{i}")));
                         TreeItem::new(
                             format!("mint_policy_{policy_id}_{i}"),
-                            format!("Policy: {}", policy_id),
+                            format!("Policy: {policy_id}"),
                             children,
                         )
                         .expect("Failed to create mint policy node")
@@ -431,10 +429,9 @@ impl TransactionsDetail {
                             .collateral
                             .iter()
                             .enumerate()
-                            .map(|(i, input)| {
+                            .flat_map(|(i, input)| {
                                 map_tx_input(input, &format!("collateral_{i}"), &tx_hash)
                             })
-                            .flatten()
                             .collect(),
                     )
                     .expect("Failed to create collateral inputs node"),
@@ -458,8 +455,9 @@ impl TransactionsDetail {
                 tx.withdrawals
                     .iter()
                     .enumerate()
-                    .map(|(i, withdrawal)| map_withdrawal(withdrawal, &format!("withdrawal_{i}")))
-                    .flatten()
+                    .flat_map(|(i, withdrawal)| {
+                        map_withdrawal(withdrawal, &format!("withdrawal_{i}"))
+                    })
                     .collect(),
             )
             .expect("Failed to create withdrawals node");
@@ -509,7 +507,7 @@ impl StatefulWidget for TransactionsDetail {
                 StatefulWidget::render(widget, area, buf, &mut state.tree_state);
             }
             Err(err) => {
-                panic!("error: {:?}", err)
+                panic!("error: {err:?}")
             }
         };
     }
@@ -718,7 +716,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                                 .map(|(j, relay)| {
                                     TreeItem::new_leaf(
                                         format!("relay_{i}_{j}"),
-                                        format!("Relay: {:?}", relay),
+                                        format!("Relay: {relay:?}"),
                                     )
                                 })
                                 .collect(),
@@ -729,7 +727,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                 if let Some(metadata) = &v.pool_metadata {
                     pool_children.push(TreeItem::new_leaf(
                         format!("metadata_{i}"),
-                        format!("Metadata: {:?}", metadata),
+                        format!("Metadata: {metadata:?}"),
                     ));
                 }
                 TreeItem::new(
@@ -803,7 +801,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                                     ));
                                     TreeItem::new(
                                         format!("mir_target_{i}_{j}"),
-                                        format!("Target {}", j),
+                                        format!("Target {j}"),
                                         target_children,
                                     )
                                     .expect("Failed to create MIR target node")
@@ -1052,14 +1050,14 @@ fn map_redeemer<'a>(redeemer: &Option<Redeemer>, index: &str) -> Vec<TreeItem<'a
     match redeemer {
         Some(redeemer) => {
             let purpose_str = match RedeemerPurpose::try_from(redeemer.purpose) {
-                Ok(purpose) => format!("{:?}", purpose),
+                Ok(purpose) => format!("{purpose:?}"),
                 Err(_) => format!("Unknown ({})", redeemer.purpose),
             };
 
             let mut children = vec![
                 TreeItem::new_leaf(
                     format!("redeemer_purpose_{index}"),
-                    format!("Purpose: {}", purpose_str),
+                    format!("Purpose: {purpose_str}"),
                 ),
                 TreeItem::new_leaf(
                     format!("redeemer_index_{index}"),
@@ -1128,8 +1126,7 @@ fn map_plutus_data<'a>(plutus_data: &PlutusData, index: &str) -> Vec<TreeItem<'a
                             .fields
                             .iter()
                             .enumerate()
-                            .map(|(j, field)| map_plutus_data(field, &format!("{index}_{j}")))
-                            .flatten()
+                            .flat_map(|(j, field)| map_plutus_data(field, &format!("{index}_{j}")))
                             .collect(),
                     )
                     .expect("Failed to create constr fields node"),
@@ -1167,7 +1164,7 @@ fn map_plutus_data<'a>(plutus_data: &PlutusData, index: &str) -> Vec<TreeItem<'a
                     }
                     TreeItem::new(
                         format!("map_pair_{index}_{j}"),
-                        format!("Pair {}", j),
+                        format!("Pair {j}"),
                         pair_children,
                     )
                     .expect("Failed to create map pair node")
@@ -1180,7 +1177,7 @@ fn map_plutus_data<'a>(plutus_data: &PlutusData, index: &str) -> Vec<TreeItem<'a
         }
         Some(plutus_data::PlutusData::BigInt(big_int)) => {
             let value = match &big_int.big_int {
-                Some(big_int::BigInt::Int(i)) => format!("Int: {}", i),
+                Some(big_int::BigInt::Int(i)) => format!("Int: {i}"),
                 Some(big_int::BigInt::BigUInt(bytes)) => format!("BigUInt: {}", hex::encode(bytes)),
                 Some(big_int::BigInt::BigNInt(bytes)) => format!("BigNInt: {}", hex::encode(bytes)),
                 None => "BigInt: None".to_string(),
@@ -1198,8 +1195,7 @@ fn map_plutus_data<'a>(plutus_data: &PlutusData, index: &str) -> Vec<TreeItem<'a
                 .items
                 .iter()
                 .enumerate()
-                .map(|(j, item)| map_plutus_data(item, &format!("{index}_{j}")))
-                .flatten()
+                .flat_map(|(j, item)| map_plutus_data(item, &format!("{index}_{j}")))
                 .collect();
             vec![TreeItem::new(
                 format!("plutus_array_{index}"),
@@ -1297,8 +1293,7 @@ fn map_native_script<'a>(native: &NativeScript, index: &str) -> Vec<TreeItem<'a,
                 .items
                 .iter()
                 .enumerate()
-                .map(|(j, item)| map_native_script(item, &format!("{index}_{j}")))
-                .flatten()
+                .flat_map(|(j, item)| map_native_script(item, &format!("{index}_{j}")))
                 .collect();
             vec![
                 TreeItem::new(format!("script_all_{index}"), "All".to_string(), children)
@@ -1310,8 +1305,7 @@ fn map_native_script<'a>(native: &NativeScript, index: &str) -> Vec<TreeItem<'a,
                 .items
                 .iter()
                 .enumerate()
-                .map(|(j, item)| map_native_script(item, &format!("{index}_{j}")))
-                .flatten()
+                .flat_map(|(j, item)| map_native_script(item, &format!("{index}_{j}")))
                 .collect();
             vec![
                 TreeItem::new(format!("script_any_{index}"), "Any".to_string(), children)
@@ -1328,8 +1322,7 @@ fn map_native_script<'a>(native: &NativeScript, index: &str) -> Vec<TreeItem<'a,
                     .scripts
                     .iter()
                     .enumerate()
-                    .map(|(j, item)| map_native_script(item, &format!("{index}_{j}")))
-                    .flatten(),
+                    .flat_map(|(j, item)| map_native_script(item, &format!("{index}_{j}"))),
             );
             vec![TreeItem::new(
                 format!("script_n_of_k_{index}"),
@@ -1341,13 +1334,13 @@ fn map_native_script<'a>(native: &NativeScript, index: &str) -> Vec<TreeItem<'a,
         Some(native_script::NativeScript::InvalidBefore(slot)) => {
             vec![TreeItem::new_leaf(
                 format!("invalid_before_{index}"),
-                format!("Invalid Before: {}", slot),
+                format!("Invalid Before: {slot}"),
             )]
         }
         Some(native_script::NativeScript::InvalidHereafter(slot)) => {
             vec![TreeItem::new_leaf(
                 format!("invalid_hereafter_{index}"),
-                format!("Invalid Hereafter: {}", slot),
+                format!("Invalid Hereafter: {slot}"),
             )]
         }
         None => vec![TreeItem::new_leaf(
@@ -1380,7 +1373,7 @@ fn map_metadatum<'a>(metadatum: &Metadatum, index: &str) -> Vec<TreeItem<'a, Str
         Some(metadatum::Metadatum::Int(i)) => {
             vec![TreeItem::new_leaf(
                 format!("metadatum_int_{index}"),
-                format!("Int: {}", i),
+                format!("Int: {i}"),
             )]
         }
         Some(metadatum::Metadatum::Bytes(bytes)) => {
@@ -1392,7 +1385,7 @@ fn map_metadatum<'a>(metadatum: &Metadatum, index: &str) -> Vec<TreeItem<'a, Str
         Some(metadatum::Metadatum::Text(text)) => {
             vec![TreeItem::new_leaf(
                 format!("metadatum_text_{index}"),
-                format!("Text: {}", text),
+                format!("Text: {text}"),
             )]
         }
         Some(metadatum::Metadatum::Array(array)) => {
@@ -1400,8 +1393,7 @@ fn map_metadatum<'a>(metadatum: &Metadatum, index: &str) -> Vec<TreeItem<'a, Str
                 .items
                 .iter()
                 .enumerate()
-                .map(|(j, item)| map_metadatum(item, &format!("{index}_{j}")))
-                .flatten()
+                .flat_map(|(j, item)| map_metadatum(item, &format!("{index}_{j}")))
                 .collect();
             vec![TreeItem::new(
                 format!("metadatum_array_{index}"),
@@ -1435,7 +1427,7 @@ fn map_metadatum<'a>(metadatum: &Metadatum, index: &str) -> Vec<TreeItem<'a, Str
                     }
                     TreeItem::new(
                         format!("metadatum_pair_{index}_{j}"),
-                        format!("Pair {}", j),
+                        format!("Pair {j}"),
                         pair_children,
                     )
                     .expect("Failed to create metadatum pair node")
@@ -1489,10 +1481,9 @@ fn map_witness_set<'a>(
                             .vkeywitness
                             .iter()
                             .enumerate()
-                            .map(|(j, vkey)| {
+                            .flat_map(|(j, vkey)| {
                                 map_vkey_witness(vkey, &format!("{index}_vkeywitness_{j}"))
                             })
-                            .flatten()
                             .collect(),
                     )
                     .expect("Failed to create vkey witnesses node"),
@@ -1507,10 +1498,9 @@ fn map_witness_set<'a>(
                             .script
                             .iter()
                             .enumerate()
-                            .map(|(j, script)| {
+                            .flat_map(|(j, script)| {
                                 map_script(&Some(script.clone()), &format!("{index}_script_{j}"))
                             })
-                            .flatten()
                             .collect(),
                     )
                     .expect("Failed to create scripts node"),
@@ -1525,8 +1515,7 @@ fn map_witness_set<'a>(
                             .plutus_datums
                             .iter()
                             .enumerate()
-                            .map(|(j, datum)| map_plutus_data(datum, &format!("{index}_{j}")))
-                            .flatten()
+                            .flat_map(|(j, datum)| map_plutus_data(datum, &format!("{index}_{j}")))
                             .collect(),
                     )
                     .expect("Failed to create plutus datums node"),
@@ -1547,9 +1536,9 @@ fn map_witness_set<'a>(
 }
 
 fn map_aux_data<'a>(aux_data: &Option<AuxData>, index: usize) -> Vec<TreeItem<'a, String>> {
-    if let Some(aux_data) = aux_data {
-        let mut children = vec![];
+    let mut children = vec![];
 
+    if let Some(aux_data) = aux_data {
         if !aux_data.metadata.is_empty() {
             children.push(
                 TreeItem::new(
@@ -1569,7 +1558,7 @@ fn map_aux_data<'a>(aux_data: &Option<AuxData>, index: usize) -> Vec<TreeItem<'a
                             }
                             TreeItem::new(
                                 format!("metadata_{index}_{j}"),
-                                format!("Metadata {}", j),
+                                format!("Metadata {j}"),
                                 meta_children,
                             )
                             .expect("Failed to create metadata node")
@@ -1589,22 +1578,25 @@ fn map_aux_data<'a>(aux_data: &Option<AuxData>, index: usize) -> Vec<TreeItem<'a
                         .scripts
                         .iter()
                         .enumerate()
-                        .map(|(j, script)| {
+                        .flat_map(|(j, script)| {
                             map_script(&Some(script.clone()), &format!("{index}_{j}"))
                         })
-                        .flatten()
                         .collect(),
                 )
                 .expect("Failed to create aux scripts node"),
             );
         }
+    };
+
+    if !children.is_empty() {
         return vec![TreeItem::new(
             format!("aux_data_{index}"),
             "Auxiliary Data".to_string(),
             children,
         )
         .expect("Failed to create aux data node")];
-    };
+    }
+
     vec![]
 }
 
@@ -1672,7 +1664,7 @@ fn map_tx_output<'a>(output: &TxOutput, index: usize, tx_hash: &str) -> TreeItem
     let mut children = vec![
         TreeItem::new_leaf(
             format!("output_{tx_hash}_{index}_address"),
-            format!("Address: {}", address),
+            format!("Address: {address}"),
         ),
         TreeItem::new_leaf(
             format!("output_{tx_hash}_{index}_coin"),
@@ -1699,7 +1691,7 @@ fn map_tx_output<'a>(output: &TxOutput, index: usize, tx_hash: &str) -> TreeItem
                                     .unwrap_or(" - ".to_string());
                                 TreeItem::new(
                                     format!("output_asset_{policy_id}_{i}_{j}"),
-                                    format!("Asset: {}", name),
+                                    format!("Asset: {name}"),
                                     vec![
                                         TreeItem::new_leaf(
                                             format!("output_asset_mintcoin_{policy_id}_{i}_{j}"),
@@ -1719,7 +1711,7 @@ fn map_tx_output<'a>(output: &TxOutput, index: usize, tx_hash: &str) -> TreeItem
 
                         TreeItem::new(
                             format!("output_policy_{policy_id}_{i}"),
-                            format!("Policy: {}", policy_id),
+                            format!("Policy: {policy_id}"),
                             asset_children,
                         )
                         .expect("Failed to create output policy node")
@@ -1733,7 +1725,7 @@ fn map_tx_output<'a>(output: &TxOutput, index: usize, tx_hash: &str) -> TreeItem
     children.extend(map_script(&output.script, &index.to_string()));
     TreeItem::new(
         format!("output_{tx_hash}_{index}"),
-        format!("{}#{}", tx_hash, index),
+        format!("{tx_hash}#{index}"),
         children,
     )
     .expect("Failed to create output node")
