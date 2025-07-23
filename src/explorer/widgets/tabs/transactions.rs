@@ -1212,31 +1212,39 @@ fn map_plutus_data<'a>(plutus_data: &PlutusData, index: &str) -> Vec<TreeItem<'a
 }
 
 fn map_datum<'a>(datum: &Option<Datum>, index: &str) -> Vec<TreeItem<'a, String>> {
-    match datum {
-        Some(datum) => {
-            let mut children = vec![
-                TreeItem::new_leaf(
-                    format!("datum_hash_{index}"),
-                    format!("Datum Hash: {}", hex::encode(&datum.hash)),
-                ),
-                TreeItem::new_leaf(
-                    format!("original_cbor_{index}"),
-                    format!("Original CBOR: {}", hex::encode(&datum.original_cbor)),
-                ),
-            ];
-            if let Some(payload) = &datum.payload {
-                children.extend(map_plutus_data(payload, &format!("datum_{index}")));
-            }
-            vec![
+    if let Some(datum) = datum {
+        let mut children = vec![];
+
+        if !datum.hash.is_empty() {
+            children.push(TreeItem::new_leaf(
+                format!("datum_hash_{index}"),
+                format!("Datum Hash: {}", hex::encode(&datum.hash)),
+            ));
+        }
+
+        if !datum.original_cbor.is_empty() {
+            children.push(TreeItem::new_leaf(
+                format!("original_cbor_{index}"),
+                format!("Original CBOR: {}", hex::encode(&datum.original_cbor)),
+            ));
+        }
+
+        if let Some(payload) = &datum.payload {
+            children.extend(map_plutus_data(payload, &format!("datum_{index}")));
+        }
+
+        if !children.is_empty() {
+            return vec![
                 TreeItem::new(format!("datum_{index}"), "Datum".to_string(), children)
                     .expect("Failed to create datum node"),
-            ]
+            ];
         }
-        None => vec![TreeItem::new_leaf(
-            format!("datum_{index}"),
-            "Datum: None".to_string(),
-        )],
     }
+
+    vec![TreeItem::new_leaf(
+        format!("datum_{index}"),
+        "Datum: None".to_string(),
+    )]
 }
 
 fn map_script<'a>(script: &Option<Script>, index: &str) -> Vec<TreeItem<'a, String>> {
@@ -1536,9 +1544,8 @@ fn map_witness_set<'a>(
 }
 
 fn map_aux_data<'a>(aux_data: &Option<AuxData>, index: usize) -> Vec<TreeItem<'a, String>> {
-    let mut children = vec![];
-
     if let Some(aux_data) = aux_data {
+        let mut children = vec![];
         if !aux_data.metadata.is_empty() {
             children.push(
                 TreeItem::new(
@@ -1586,16 +1593,16 @@ fn map_aux_data<'a>(aux_data: &Option<AuxData>, index: usize) -> Vec<TreeItem<'a
                 .expect("Failed to create aux scripts node"),
             );
         }
-    };
 
-    if !children.is_empty() {
-        return vec![TreeItem::new(
-            format!("aux_data_{index}"),
-            "Auxiliary Data".to_string(),
-            children,
-        )
-        .expect("Failed to create aux data node")];
-    }
+        if !children.is_empty() {
+            return vec![TreeItem::new(
+                format!("aux_data_{index}"),
+                "Auxiliary Data".to_string(),
+                children,
+            )
+            .expect("Failed to create aux data node")];
+        }
+    };
 
     vec![]
 }
