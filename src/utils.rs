@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local};
 use miette::{bail, IntoDiagnostic};
+use num_format::{Locale, ToFormattedString};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +41,23 @@ impl std::ops::Deref for Name {
 impl std::fmt::Display for Name {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+pub trait AdaFormat {
+    fn format_ada(self) -> String;
+}
+impl AdaFormat for u64 {
+    fn format_ada(self) -> String {
+        let decimals = 6;
+        let factor = 10u64.pow(decimals);
+        let whole = self / factor;
+        let fraction = self % factor;
+
+        let whole_str = whole.to_formatted_string(&Locale::en);
+        let fraction_str = format!("{:0width$}", fraction, width = decimals as usize);
+
+        format!("{whole_str}.{fraction_str}")
     }
 }
 
