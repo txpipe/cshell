@@ -120,7 +120,7 @@ impl NewViewAddress {
 
 impl Widget for NewViewAddress {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup_area = centered_rect(60, 25, area);
+        let popup_area = centered_rect(60, 16, area);
 
         Clear.render(popup_area, buf);
 
