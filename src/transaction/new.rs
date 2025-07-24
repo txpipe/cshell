@@ -4,9 +4,11 @@ use clap::Parser;
 use inquire::{Confirm, MultiSelect};
 use jsonrpsee::core::params::ObjectParams;
 use miette::{bail, Context, IntoDiagnostic};
+use pallas::ledger::addresses::Address;
 use serde_json::json;
 use tracing::instrument;
-use tx3_lang::Protocol;
+use tx3_lang::{Protocol, UtxoRef};
+use tx3_sdk::trp::{self, ArgValue};
 
 use crate::output::OutputFormat;
 
@@ -86,32 +88,46 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
             let params = prototx.find_params();
             let mut argvalues = serde_json::Map::new();
             for (key, value) in params {
+                let text_key = format!("{key}:");
                 match value {
                     tx3_lang::ir::Type::Address => {
-                        let options = ctx
+                        let custom_address = String::from("custom address");
+                        let mut options = ctx
                             .store
                             .wallets()
                             .iter()
                             .map(|x| x.name.to_string())
-                            .collect();
+                            .collect::<Vec<String>>();
 
-                        let wallet = inquire::Select::new(&key, options)
+                        options.push(custom_address.clone());
+
+                        let wallet = inquire::Select::new(&text_key, options)
                             .prompt()
                             .into_diagnostic()?;
 
-                        let address = ctx
-                            .store
-                            .wallets()
-                            .iter()
-                            .find(|x| x.name.to_string() == wallet)
-                            .unwrap()
-                            .address(provider.is_testnet());
+                        let address = if wallet.eq(&custom_address) {
+                            let value = inquire::Text::new("address:")
+                                .with_help_message("Enter a bech32 address")
+                                .prompt()
+                                .into_diagnostic()?;
+
+                            Address::from_bech32(&value)
+                                .into_diagnostic()
+                                .context("invalid bech32 address")?
+                        } else {
+                            ctx.store
+                                .wallets()
+                                .iter()
+                                .find(|x| x.name.to_string() == wallet)
+                                .unwrap()
+                                .address(provider.is_testnet())
+                        };
 
                         argvalues
-                            .insert(key, serde_json::Value::String(address.to_bech32().unwrap()));
+                            .insert(key, trp::args::to_json(ArgValue::Address(address.to_vec())));
                     }
                     tx3_lang::ir::Type::Int => {
-                        let value = inquire::Text::new(&key)
+                        let value = inquire::Text::new(&text_key)
                             .with_help_message("Enter an integer value")
                             .prompt()
                             .into_diagnostic()?
@@ -119,43 +135,60 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
                             .into_diagnostic()
                             .context("invalid integer value")?;
 
-                        argvalues.insert(key, serde_json::Value::Number(value.into()));
-                    }
-                    tx3_lang::ir::Type::Undefined => {
-                        let value = inquire::Text::new(&key)
-                            .with_help_message("Enter the value as json")
-                            .prompt()
-                            .into_diagnostic()?
-                            .parse::<serde_json::Value>()
-                            .into_diagnostic()
-                            .context("invalid json value")?;
-
-                        argvalues.insert(key, value);
+                        argvalues.insert(key, trp::args::to_json(ArgValue::Int(value.into())));
                     }
                     tx3_lang::ir::Type::UtxoRef => {
-                        let value = inquire::Text::new(&key)
+                        let value = inquire::Text::new(&text_key)
                             .with_help_message("Enter the utxo reference as hash#idx")
                             .prompt()
                             .into_diagnostic()
                             .context("invalid integer value")?;
 
-                        argvalues.insert(key, serde_json::Value::String(value));
-                    }
-                    tx3_lang::ir::Type::Unit => {
-                        argvalues.insert(key, serde_json::Value::Null);
+                        let (hash, idx) = value
+                            .split_once('#')
+                            .ok_or_else(|| miette::miette!("expected format: <hash>#<index>"))?;
+
+                        let hash = hex::decode(hash)
+                            .into_diagnostic()
+                            .context("invalid hex value for hash")?;
+
+                        let idx: u32 = idx
+                            .parse()
+                            .into_diagnostic()
+                            .context("invalid integer value for index")?;
+
+                        let utxo_ref = UtxoRef::new(hash.as_slice(), idx);
+                        argvalues.insert(key, trp::args::to_json(ArgValue::UtxoRef(utxo_ref)));
                     }
                     tx3_lang::ir::Type::Bool => {
-                        let value = inquire::Confirm::new(&key).prompt().into_diagnostic()?;
+                        let value = inquire::Confirm::new(&text_key)
+                            .prompt()
+                            .into_diagnostic()?;
 
-                        argvalues.insert(key, serde_json::Value::Bool(value));
+                        argvalues.insert(key, trp::args::to_json(ArgValue::Bool(value)));
                     }
                     tx3_lang::ir::Type::Bytes => {
-                        let value = inquire::Text::new(&key)
+                        let value = inquire::Text::new(&text_key)
                             .with_help_message("Enter the bytes as hex string")
                             .prompt()
                             .into_diagnostic()?;
 
-                        argvalues.insert(key, serde_json::Value::String(value));
+                        let value = hex::decode(value)
+                            .into_diagnostic()
+                            .context("invalid hex value")?;
+
+                        argvalues.insert(key, trp::args::to_json(ArgValue::Bytes(value)));
+                    }
+
+                    tx3_lang::ir::Type::Undefined => {
+                        return Err(miette::miette!(
+                            "tx3 arg {key} is of type Undefined, not supported yet"
+                        ));
+                    }
+                    tx3_lang::ir::Type::Unit => {
+                        return Err(miette::miette!(
+                            "tx3 arg {key} is of type Unit, not supported yet",
+                        ));
                     }
                     tx3_lang::ir::Type::Utxo => {
                         return Err(miette::miette!(
