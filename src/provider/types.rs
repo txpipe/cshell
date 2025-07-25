@@ -5,7 +5,7 @@ use jsonrpsee::{
     core::{client::ClientT, params::ObjectParams},
     http_client::HttpClient,
 };
-use miette::{bail, Context, IntoDiagnostic};
+use miette::{bail, miette, Context, IntoDiagnostic};
 use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -244,11 +244,25 @@ impl Provider {
 
     pub async fn submit(&self, tx: &[u8]) -> miette::Result<Vec<u8>> {
         let mut client: CardanoSubmitClient = self.client().await?;
-        client
-            .submit_tx(vec![tx.to_vec()])
-            .await
-            .into_diagnostic()
-            .map(|x| x.first().unwrap().to_vec())
+
+        match client.submit_tx(vec![tx.to_vec()]).await {
+            Ok(response) => response
+                .first()
+                .map(|r| r.to_vec())
+                .ok_or_else(|| miette!("No response received from submit")),
+            Err(err) => {
+                match err {
+                    utxorpc::Error::TransportError(e) => {
+                        Err(miette!(e).context("Network error while submitting transaction"))
+                    }
+                    utxorpc::Error::GrpcError(status) => Err(miette!(status.message().to_string())
+                        .context("Transaction submission failed")),
+                    utxorpc::Error::ParseError(e) => {
+                        Err(miette!(e).context("Failed to parse transaction"))
+                    }
+                }
+            }
+        }
     }
 
     pub async fn trp_resolve(&self, params: &ObjectParams) -> miette::Result<TrpResponse> {
