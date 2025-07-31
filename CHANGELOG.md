@@ -2,11 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2025-07-31
+
+### 🚀 Features
+
+- Improve tx detail page (#35)
+- Improve account page (#34)
+- Improve interactive mode in tx flow (#37)
+
+### ⚙️ Miscellaneous Tasks
+
+- Set fixed popup window length (#33)
+- Update tx3 to v0.11.0
+
 ## [0.9.0] - 2025-07-16
 
 ### 🚀 Features
 
 - Implement ad-hoc address view (#32)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.9.0
 
 ## [0.8.1] - 2025-07-15
 

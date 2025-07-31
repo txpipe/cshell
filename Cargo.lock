@@ -607,7 +607,7 @@ checksum = "382ce8820a5bb815055d3553a610e8cb542b2d767bbacea99038afda96cd760d"
 
 [[package]]
 name = "cshell"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "backoff",
  "bech32 0.9.1",
@@ -643,7 +643,7 @@ dependencies = [
  "tracing-subscriber",
  "tui-tree-widget",
  "tx3-cardano",
- "tx3-lang 0.11.0",
+ "tx3-lang",
  "tx3-sdk",
  "url",
  "utxorpc 0.11.0",
@@ -3596,24 +3596,8 @@ dependencies = [
  "serde",
  "thiserror 2.0.12",
  "trait-variant",
- "tx3-lang 0.11.0",
+ "tx3-lang",
  "utxorpc 0.10.0",
-]
-
-[[package]]
-name = "tx3-lang"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ffaa32efb0788a1de7a67be5b13233a6b24a5cce0247c6d7411cb4c84e88b88"
-dependencies = [
- "bincode",
- "hex",
- "miette",
- "pest",
- "pest_derive",
- "serde",
- "thiserror 2.0.12",
- "trait-variant",
 ]
 
 [[package]]
@@ -3644,7 +3628,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.12",
- "tx3-lang 0.10.1",
+ "tx3-lang",
  "uuid",
 ]
 
@@ -4006,7 +3990,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
