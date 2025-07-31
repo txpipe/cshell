@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.1] - 2025-07-31
+
+### ⚙️ Miscellaneous Tasks
+
+- Update tx3 to v0.11.0
+
 ## [0.9.0] - 2025-07-16
 
 ### 🚀 Features
 
 - Implement ad-hoc address view (#32)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.9.0
 
 ## [0.8.1] - 2025-07-15
 
