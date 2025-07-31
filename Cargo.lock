@@ -3304,15 +3304,14 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tx3-cardano"
-version = "0.8.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f03542397e6ba2d792eb64425f0818bab2c291357eab8ac97d553d8b3af2efc4"
+checksum = "e8647f1c8bb3e5d95ad9da5280f682c28a6bf7895249b641f5fefb0b37388f13"
 dependencies = [
  "hex",
  "pallas",
  "serde",
  "thiserror 2.0.12",
- "tokio",
  "trait-variant",
  "tx3-lang",
  "utxorpc 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3320,9 +3319,9 @@ dependencies = [
 
 [[package]]
 name = "tx3-lang"
-version = "0.8.2"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea8fb2e4346de691f5004e08aea16313a84799f7fe8af5da3fd848d54e99baa"
+checksum = "6b9d050963aff1d574bfc4635d01b01e09df2401633ccbf83c24797de5f426b9"
 dependencies = [
  "bincode",
  "hex",
@@ -3331,6 +3330,7 @@ dependencies = [
  "pest_derive",
  "serde",
  "thiserror 2.0.12",
+ "trait-variant",
 ]
 
 [[package]]
