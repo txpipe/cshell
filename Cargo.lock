@@ -643,7 +643,7 @@ dependencies = [
  "tracing-subscriber",
  "tui-tree-widget",
  "tx3-cardano",
- "tx3-lang",
+ "tx3-lang 0.11.0",
  "tx3-sdk",
  "url",
  "utxorpc 0.11.0",
@@ -3587,16 +3587,16 @@ dependencies = [
 
 [[package]]
 name = "tx3-cardano"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaa4ee5b6032ea674b938d17497634b3efb0e4105a764f5484fcd7790a4c6f8f"
+checksum = "e8647f1c8bb3e5d95ad9da5280f682c28a6bf7895249b641f5fefb0b37388f13"
 dependencies = [
  "hex",
  "pallas",
  "serde",
  "thiserror 2.0.12",
  "trait-variant",
- "tx3-lang",
+ "tx3-lang 0.11.0",
  "utxorpc 0.10.0",
 ]
 
@@ -3605,6 +3605,22 @@ name = "tx3-lang"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ffaa32efb0788a1de7a67be5b13233a6b24a5cce0247c6d7411cb4c84e88b88"
+dependencies = [
+ "bincode",
+ "hex",
+ "miette",
+ "pest",
+ "pest_derive",
+ "serde",
+ "thiserror 2.0.12",
+ "trait-variant",
+]
+
+[[package]]
+name = "tx3-lang"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b9d050963aff1d574bfc4635d01b01e09df2401633ccbf83c24797de5f426b9"
 dependencies = [
  "bincode",
  "hex",
@@ -3628,7 +3644,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.12",
- "tx3-lang",
+ "tx3-lang 0.10.1",
  "uuid",
 ]
 
