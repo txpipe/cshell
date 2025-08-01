@@ -1,15 +1,14 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
-    style::{Color, Style, Stylize},
-    widgets::{Block, Sparkline, Widget},
+    style::{Color, Style, Stylize}, symbols, widgets::{Block, Sparkline, Widget}
 };
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use crate::explorer::{App, ChainBlock};
 
-fn get_last_slots(data: Rc<RefCell<VecDeque<ChainBlock>>>, size: usize) -> Vec<u64> {
+fn get_last_slots(data: Rc<RefCell<VecDeque<ChainBlock>>>, size: usize) -> Vec<Option<u64>> {
     let data = data.borrow();
-    let mut result = vec![0; size];
+    let mut result = vec![Some(0); size];
 
     if data.is_empty() {
         return result;
@@ -23,7 +22,7 @@ fn get_last_slots(data: Rc<RefCell<VecDeque<ChainBlock>>>, size: usize) -> Vec<u
     for item in last_blocks {
         if item.slot <= max_slot && item.slot > min_slot {
             let index = (max_slot - item.slot) as usize;
-            result[size - 1 - index] = item.tx_count as u64;
+            result[size - 1 - index] = (item.tx_count > 0).then_some(item.tx_count as u64);
         }
     }
 
@@ -50,12 +49,12 @@ impl Widget for ActivityMonitor {
         Self: Sized,
     {
         let size = area.width as usize - 2;
-        let mut points: VecDeque<u64> = get_last_slots(self.blocks, size).into();
+        let mut points: VecDeque<Option<u64>> = get_last_slots(self.blocks, size).into();
         let (title, color) = match self.last_block_seen {
             Some(dt) => {
                 let seconds = (Utc::now() - dt).num_seconds();
                 for _ in 0..seconds {
-                    points.push_back(0);
+                    points.push_back(Some(0));
                     points.pop_front();
                 }
 
@@ -78,6 +77,7 @@ impl Widget for ActivityMonitor {
                     .title(title),
             )
             .data(&points)
+            .absent_value_symbol(symbols::shade::LIGHT)
             .style(Style::default().fg(color));
         sparkline.render(area, buf);
     }
