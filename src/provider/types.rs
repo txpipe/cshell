@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use comfy_table::Table;
 use jsonrpsee::{
-    core::{client::ClientT, params::ObjectParams},
+    core::{client::ClientT, params::ObjectParams, ClientError},
     http_client::HttpClient,
 };
 use miette::{bail, miette, Context, IntoDiagnostic};
@@ -280,7 +280,22 @@ impl Provider {
         client
             .request("trp.resolve", params.to_owned())
             .await
-            .into_diagnostic()
+            .map_err(|err| {
+                if let ClientError::Call(error_object) = &err {
+                    let message = error_object.message().to_string();
+
+                    return error_object
+                        .data()
+                        .and_then(|data| {
+                            serde_json::from_str::<String>(&data.to_string())
+                                .ok()
+                                .map(|v| miette!(v).context(message.clone()))
+                        })
+                        .unwrap_or_else(|| miette!(message));
+                }
+
+                miette!("{}", err.to_string())
+            })
     }
 }
 
