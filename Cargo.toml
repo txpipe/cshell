@@ -2,7 +2,7 @@
 name = "cshell"
 version = "0.10.0"
 edition = "2021"
-rust-version = "1.82.0"
+rust-version = "1.88.0"
 authors = ["TxPipe <hello@txpipe.io>"]
 description = "A Cardano wallet CLI built for developers."
 readme = "README.md"
