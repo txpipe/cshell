@@ -6,7 +6,7 @@ mod explorer;
 mod output;
 mod provider;
 mod store;
-mod transaction;
+mod tx;
 mod types;
 mod utils;
 
@@ -53,8 +53,8 @@ enum Commands {
     Provider(provider::Args),
 
     /// Manage Transactions
-    #[command(alias = "tx")]
-    Transaction(transaction::Args),
+    #[command(alias = "transaction")]
+    Tx(tx::Args),
 
     /// Manage Wallets
     Wallet(wallet::Args),
@@ -124,7 +124,7 @@ async fn main() -> miette::Result<()> {
 
     match cli.command {
         Commands::Provider(args) => provider::run(args, &mut ctx).await?,
-        Commands::Transaction(args) => transaction::run(args, &ctx).await?,
+        Commands::Tx(args) => tx::run(args, &ctx).await?,
         Commands::Wallet(args) => wallet::run(args, &mut ctx).await?,
         Commands::Explorer(args) => explorer::run(args, &ctx).await?,
     };
