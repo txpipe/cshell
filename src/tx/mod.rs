@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand};
 use tracing::instrument;
 
-mod new;
+mod common;
+
+mod invoke;
 mod resolve;
 mod sign;
 mod submit;
@@ -14,23 +16,23 @@ pub struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start a new full transaction, resolve, sign and submit
-    New(new::Args),
+    /// Invoke a tx3 transaction (resolve, sign and submit)
+    Invoke(invoke::Args),
 
-    /// Resolve a transaction
+    /// Resolve a tx3 transaction
     Resolve(resolve::Args),
 
-    /// Sign a transaction cbor
+    /// Sign a CBOR transaction
     Sign(sign::Args),
 
-    /// Submit a transaction cbor
+    /// Submit a CBOR transaction
     Submit(submit::Args),
 }
 
 #[instrument("transaction", skip_all)]
 pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
     match args.command {
-        Commands::New(args) => new::run(args, ctx).await,
+        Commands::Invoke(args) => invoke::run(args, ctx).await,
         Commands::Resolve(args) => resolve::run(args, ctx).await,
         Commands::Sign(args) => sign::run(args, ctx).await,
         Commands::Submit(args) => submit::run(args, ctx).await,

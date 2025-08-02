@@ -20,12 +20,6 @@ use crate::{
     utils::Name,
 };
 
-#[derive(Serialize, Deserialize)]
-pub struct TrpResponse {
-    #[serde(with = "hex::serde")]
-    pub tx: Vec<u8>,
-}
-
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(tag = "type")]
 pub struct Provider {
@@ -265,7 +259,10 @@ impl Provider {
         }
     }
 
-    pub async fn trp_resolve(&self, params: &ObjectParams) -> miette::Result<TrpResponse> {
+    pub async fn trp_resolve(
+        &self,
+        params: &ObjectParams,
+    ) -> miette::Result<tx3_sdk::trp::TxEnvelope> {
         let Some(trp_url) = &self.trp_url else {
             bail!("missing TRP configuration for this provider")
         };
