@@ -3619,6 +3619,8 @@ dependencies = [
 [[package]]
 name = "tx3-sdk"
 version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e249299616f099372b45ff1605900671697547bd6691ca154f0aa36dc665cbc"
 dependencies = [
  "base64 0.22.1",
  "bech32 0.11.0",
