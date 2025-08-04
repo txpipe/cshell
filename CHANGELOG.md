@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.10.0] - 2025-07-31
+## [0.11.0] - 2025-08-04
+
+### 🚀 Features
+
+- *(explorer)* Show light bar when block is empty (#41)
+
+### 🚜 Refactor
+
+- Remove duplication on invoke cmd (#42)
+- Remove miette in favor of anyhow and a custom render (#43)
+
+## [0.10.0] - 2025-08-01
 
 ### 🚀 Features
 
@@ -10,10 +21,15 @@ All notable changes to this project will be documented in this file.
 - Improve account page (#34)
 - Improve interactive mode in tx flow (#37)
 
+### 🔧 Continuous Integration
+
+- Update rust version in cargo dist config (#40)
+
 ### ⚙️ Miscellaneous Tasks
 
 - Set fixed popup window length (#33)
 - Update tx3 to v0.11.0
+- Release cshell version 0.10.0
 
 ## [0.9.0] - 2025-07-16
 
