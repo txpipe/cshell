@@ -30,7 +30,7 @@ enum Commands {
 }
 
 #[instrument("transaction", skip_all)]
-pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &crate::Context) -> anyhow::Result<()> {
     match args.command {
         Commands::Invoke(args) => invoke::run(args, ctx).await,
         Commands::Resolve(args) => resolve::run(args, ctx).await,

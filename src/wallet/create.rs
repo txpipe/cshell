@@ -1,5 +1,5 @@
+use anyhow::bail;
 use clap::Parser;
-use miette::{bail, IntoDiagnostic};
 use tracing::instrument;
 
 use crate::{output::OutputFormatter, utils::Name};
@@ -24,12 +24,10 @@ pub struct Args {
 }
 
 #[instrument("create", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     let raw_name = match args.name {
         Some(name) => name,
-        None => inquire::Text::new("Name of the wallet:")
-            .prompt()
-            .into_diagnostic()?,
+        None => inquire::Text::new("Name of the wallet:").prompt()?,
     };
     let name = Name::try_from(raw_name)?;
 
@@ -47,8 +45,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             None => inquire::Password::new("Password:")
                 .with_help_message("The spending password of your wallet")
                 .with_display_mode(inquire::PasswordDisplayMode::Masked)
-                .prompt()
-                .into_diagnostic()?,
+                .prompt()?,
         },
     };
 

@@ -1,10 +1,8 @@
+use anyhow::bail;
 use clap::Parser;
-use miette::{bail, IntoDiagnostic};
 use tracing::instrument;
 
-use crate::{output::OutputFormatter, utils::Name};
-
-use super::types::Wallet;
+use crate::{output::OutputFormatter, utils::Name, wallet::types::Wallet};
 
 #[derive(Parser, Clone)]
 pub struct Args {
@@ -29,12 +27,12 @@ pub struct Args {
 }
 
 #[instrument("restore", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     let raw_name = match args.name {
         Some(name) => name,
         None => inquire::Text::new("Name of the wallet:")
             .prompt()
-            .into_diagnostic()?,
+            .map_err(anyhow::Error::msg)?,
     };
     let name = Name::try_from(raw_name)?;
 
@@ -53,7 +51,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
                 .with_help_message("The spending password of your wallet")
                 .with_display_mode(inquire::PasswordDisplayMode::Masked)
                 .prompt()
-                .into_diagnostic()?,
+                .map_err(anyhow::Error::msg)?,
         },
     };
 
@@ -61,7 +59,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         Some(name) => name,
         None => inquire::Text::new("BIP39 mnemonic:")
             .prompt()
-            .into_diagnostic()?,
+            .map_err(anyhow::Error::msg)?,
     };
     let wallet = Wallet::try_from_mnemonic(
         &name,

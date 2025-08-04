@@ -1,5 +1,5 @@
+use anyhow::{bail, Context, Result};
 use clap::Parser;
-use miette::{bail, Context, IntoDiagnostic};
 use serde_json::json;
 use tracing::instrument;
 
@@ -19,10 +19,8 @@ pub struct Args {
 }
 
 #[instrument("submit", skip_all)]
-pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
-    let cbor = hex::decode(&args.cbor)
-        .into_diagnostic()
-        .context("invalid cbor")?;
+pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
+    let cbor = hex::decode(&args.cbor).context("invalid cbor")?;
 
     let provider = match args.provider {
         Some(name) => ctx.store.find_provider(&name),

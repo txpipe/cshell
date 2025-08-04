@@ -8,7 +8,7 @@ pub struct Args {
 }
 
 #[instrument("delete", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     let wallet = ctx.store.find_wallet(&args.name);
     match wallet {
         Some(wallet) => {

@@ -8,7 +8,7 @@ pub struct Args {
 }
 
 #[instrument("delete", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     let provider = ctx.store.find_provider(&args.name);
     match provider {
         Some(provider) => {

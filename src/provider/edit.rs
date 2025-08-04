@@ -1,15 +1,14 @@
 use std::collections::HashMap;
 
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use inquire::list_option::ListOption;
-use miette::{bail, IntoDiagnostic};
 
 use crate::{
     output::OutputFormatter,
+    provider::types::Provider,
     utils::{show_is_current, Name},
 };
-
-use super::types::Provider;
 
 #[derive(clap::ValueEnum, Clone, PartialEq)]
 enum NetworkKind {
@@ -35,22 +34,19 @@ pub struct Args {
 }
 
 // #[instrument("create", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     let provider = match args.name {
         Some(name) => ctx.store.find_provider(&name),
         None => ctx.store.default_provider(),
-    };
-
-    let Some(provider) = provider else {
-        bail!("Provider not found.")
-    };
+    }
+    .context("Provider not found")?;
 
     let new_name = match args.new_name {
         None => {
             let new_name = inquire::Text::new("New name: ")
                 .with_default(&provider.name())
                 .prompt()
-                .into_diagnostic()?;
+                .map_err(anyhow::Error::msg)?;
             Name::try_from(new_name)?
         }
         Some(new_name) => Name::try_from(new_name)?,
@@ -66,7 +62,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             ],
         )
         .prompt()
-        .into_diagnostic()?
+        .map_err(anyhow::Error::msg)?
         .index
         {
             0 => true,
@@ -91,7 +87,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             ],
         )
         .prompt()
-        .into_diagnostic()?
+        .map_err(anyhow::Error::msg)?
         .index
         {
             0 => NetworkKind::Mainnet,
@@ -104,7 +100,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     let new_url = inquire::Text::new("URL:")
         .with_default(&provider.url)
         .prompt()
-        .into_diagnostic()?;
+        .map_err(anyhow::Error::msg)?;
     let current_headers = provider
         .headers
         .clone()
@@ -123,7 +119,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     )
     .with_default(&current_headers)
     .prompt()
-    .into_diagnostic()?
+    .map_err(anyhow::Error::msg)?
     .split(",")
     .map(|keyval| {
         let mut parts = keyval.split(":");
@@ -137,12 +133,12 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         };
         Ok((key.to_string(), val.to_string()))
     })
-    .collect::<Result<_, miette::Error>>()?;
+    .collect::<Result<_, anyhow::Error>>()?;
 
     let new_trp_url = inquire::Text::new("TRP URL:")
         .with_default(&provider.trp_url.clone().unwrap_or("".to_string()))
         .prompt()
-        .into_diagnostic()?;
+        .map_err(anyhow::Error::msg)?;
 
     let current_trp_headers = provider
         .trp_headers
@@ -160,7 +156,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     )
     .with_default(&current_trp_headers)
     .prompt()
-    .into_diagnostic()?
+    .map_err(anyhow::Error::msg)?
     .split(",")
     .map(|keyval| {
         let mut parts = keyval.split(":");
@@ -174,7 +170,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         };
         Ok((key.to_string(), val.to_string()))
     })
-    .collect::<Result<_, miette::Error>>()?;
+    .collect::<Result<_, anyhow::Error>>()?;
 
     let new_provider = Provider {
         name: new_name,

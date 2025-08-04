@@ -1,13 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use anyhow::{bail, Result};
 use clap::Parser;
-use miette::{bail, IntoDiagnostic};
 use tracing::instrument;
 
-use crate::{output::OutputFormatter, utils::Name};
-
-use super::types::Provider;
+use crate::{output::OutputFormatter, provider::types::Provider, utils::Name};
 
 #[derive(clap::ValueEnum, Clone, PartialEq)]
 enum NetworkKind {
@@ -53,12 +51,12 @@ pub struct Args {
 }
 
 #[instrument("create", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     let raw_name = match args.name {
         Some(name) => name,
         None => inquire::Text::new("Name of the provider:")
             .prompt()
-            .into_diagnostic()?,
+            .map_err(anyhow::Error::msg)?,
     };
     let name = Name::try_from(raw_name)?;
 
@@ -78,7 +76,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         Some(network_kind) => network_kind,
         None => match inquire::Select::new("Network kind:", vec!["mainnet", "testnet"])
             .prompt()
-            .into_diagnostic()?
+            .map_err(anyhow::Error::msg)?
         {
             "mainnet" => NetworkKind::Mainnet,
             "testnet" => NetworkKind::Testnet,
@@ -89,15 +87,17 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
 
     let url = match args.utxorpc_url {
         Some(url) => url,
-        None => inquire::Text::new("URL:").prompt().into_diagnostic()?,
+        None => inquire::Text::new("URL:")
+            .prompt()
+            .map_err(anyhow::Error::msg)?,
     };
     let headers: HashMap<String, String> = match args.utxorpc_headers {
-        Some(aux) => serde_json::from_str(&aux).into_diagnostic()?,
+        Some(aux) => serde_json::from_str(&aux).map_err(anyhow::Error::msg)?,
         None => inquire::Text::new(
             "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
         )
         .prompt()
-        .into_diagnostic()?
+        .map_err(anyhow::Error::msg)?
         .split(",")
         .flat_map(|keyval| {
             if keyval.is_empty() {
@@ -106,15 +106,15 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
             let mut parts = keyval.split(":");
             let key = match parts.next() {
                 Some(s) => s,
-                None => return Some(Err(miette::Error::msg("Invalid header"))),
+                None => return Some(Err(anyhow::Error::msg("Invalid header"))),
             };
             let val = match parts.next() {
                 Some(s) => s,
-                None => return Some(Err(miette::Error::msg("Invalid header"))),
+                None => return Some(Err(anyhow::Error::msg("Invalid header"))),
             };
             Some(Ok((key.to_string(), val.to_string())))
         })
-        .collect::<Result<_, miette::Error>>()?,
+        .collect::<Result<_, anyhow::Error>>()?,
     };
 
     let trp_url = match args.trp_url {
@@ -122,7 +122,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
         None => {
             let response = inquire::Text::new("TRP URL (leave empty for undefined):")
                 .prompt()
-                .into_diagnostic()?;
+                .map_err(anyhow::Error::msg)?;
             if response.is_empty() {
                 None
             } else {
@@ -133,13 +133,13 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
     let mut trp_headers = None;
     if trp_url.is_some() {
         let aux: HashMap<String, String> = match args.trp_headers {
-            Some(inner) => serde_json::from_str(&inner).into_diagnostic()?,
+            Some(inner) => serde_json::from_str(&inner).map_err(anyhow::Error::msg)?,
 
             None => inquire::Text::new(
                 "Add request headers? Example: 'dmtr-api-key:dmtr_jdndajs,other:other-value'",
             )
             .prompt()
-            .into_diagnostic()?
+            .map_err(anyhow::Error::msg)?
             .split(",")
             .flat_map(|keyval| {
                 if keyval.is_empty() {
@@ -148,15 +148,15 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
                 let mut parts = keyval.split(":");
                 let key = match parts.next() {
                     Some(s) => s,
-                    None => return Some(Err(miette::Error::msg("Invalid header"))),
+                    None => return Some(Err(anyhow::Error::msg("Invalid header"))),
                 };
                 let val = match parts.next() {
                     Some(s) => s,
-                    None => return Some(Err(miette::Error::msg("Invalid header"))),
+                    None => return Some(Err(anyhow::Error::msg("Invalid header"))),
                 };
                 Some(Ok((key.to_string(), val.to_string())))
             })
-            .collect::<Result<_, miette::Error>>()?,
+            .collect::<Result<_, anyhow::Error>>()?,
         };
 
         if !aux.is_empty() {
