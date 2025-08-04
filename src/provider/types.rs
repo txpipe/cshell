@@ -1,11 +1,7 @@
 use std::collections::HashMap;
 
+use anyhow::{anyhow, bail, Context, Result};
 use comfy_table::Table;
-use jsonrpsee::{
-    core::{client::ClientT, params::ObjectParams},
-    http_client::HttpClient,
-};
-use miette::{bail, miette, Context, IntoDiagnostic};
 use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -51,27 +47,25 @@ impl Provider {
         self.is_testnet.unwrap_or(false)
     }
 
-    pub async fn client<T>(&self) -> miette::Result<T>
+    pub async fn client<T>(&self) -> Result<T>
     where
         T: From<InnerService>,
     {
-        let mut client_builder = ClientBuilder::new()
-            .uri(self.url.clone())
-            .into_diagnostic()?;
+        let mut client_builder = ClientBuilder::new().uri(self.url.clone())?;
 
         if let Some(headers) = &self.headers {
             for (k, v) in headers {
-                client_builder = client_builder.metadata(k, v).into_diagnostic()?;
+                client_builder = client_builder.metadata(k, v)?;
             }
         }
         Ok(client_builder.build::<T>().await)
     }
-    pub async fn test(&self) -> miette::Result<()> {
+    pub async fn test(&self) -> Result<()> {
         println!("Building client...");
         let mut client: CardanoSyncClient = self.client().await?;
 
         println!("Executing ReadTip method...");
-        let result = client.read_tip().await.into_diagnostic()?;
+        let result = client.read_tip().await?;
         match result {
             Some(blockref) => {
                 println!(
@@ -86,7 +80,7 @@ impl Provider {
         Ok(())
     }
 
-    pub async fn get_balance(&self, address: &Address) -> miette::Result<Balance> {
+    pub async fn get_balance(&self, address: &Address) -> Result<Balance> {
         let mut client: CardanoQueryClient = self.client().await?;
 
         let predicate = utxorpc::spec::query::UtxoPredicate {
@@ -106,7 +100,6 @@ impl Provider {
         let utxos = client
             .search_utxos(predicate, None, u32::MAX)
             .await
-            .into_diagnostic()
             .context("failed to query utxos")?;
 
         let coin: u64 = utxos
@@ -166,7 +159,7 @@ impl Provider {
         })
     }
 
-    pub async fn get_detailed_balance(&self, address: &Address) -> miette::Result<DetailedBalance> {
+    pub async fn get_detailed_balance(&self, address: &Address) -> Result<DetailedBalance> {
         let mut client: CardanoQueryClient = self.client().await?;
 
         let predicate = utxorpc::spec::query::UtxoPredicate {
@@ -186,7 +179,6 @@ impl Provider {
         let utxos = client
             .search_utxos(predicate, None, u32::MAX)
             .await
-            .into_diagnostic()
             .context("failed to query utxos")?;
 
         let mut result: DetailedBalance = utxos
@@ -236,23 +228,23 @@ impl Provider {
         Ok(result)
     }
 
-    pub async fn submit(&self, tx: &[u8]) -> miette::Result<Vec<u8>> {
+    pub async fn submit(&self, tx: &[u8]) -> Result<Vec<u8>> {
         let mut client: CardanoSubmitClient = self.client().await?;
 
         match client.submit_tx(vec![tx.to_vec()]).await {
             Ok(response) => response
                 .first()
                 .map(|r| r.to_vec())
-                .ok_or_else(|| miette!("No response received from submit")),
+                .ok_or_else(|| anyhow!("No response received from submit")),
             Err(err) => {
                 match err {
                     utxorpc::Error::TransportError(e) => {
-                        Err(miette!(e).context("Network error while submitting transaction"))
+                        Err(anyhow!(e).context("Network error while submitting transaction"))
                     }
-                    utxorpc::Error::GrpcError(status) => Err(miette!(status.message().to_string())
+                    utxorpc::Error::GrpcError(status) => Err(anyhow!(status.message().to_string())
                         .context("Transaction submission failed")),
                     utxorpc::Error::ParseError(e) => {
-                        Err(miette!(e).context("Failed to parse transaction"))
+                        Err(anyhow!(e).context("Failed to parse transaction"))
                     }
                 }
             }
@@ -261,23 +253,38 @@ impl Provider {
 
     pub async fn trp_resolve(
         &self,
-        params: &ObjectParams,
-    ) -> miette::Result<tx3_sdk::trp::TxEnvelope> {
+        request: tx3_sdk::trp::ProtoTxRequest,
+    ) -> Result<tx3_sdk::trp::TxEnvelope> {
         let Some(trp_url) = &self.trp_url else {
             bail!("missing TRP configuration for this provider")
         };
 
-        let mut client_builder = HttpClient::builder();
-        if let Some(headers) = &self.trp_headers {
-            let headermap = headers.try_into().into_diagnostic()?;
-            client_builder = client_builder.set_headers(headermap);
-        }
-        let client = client_builder.build(trp_url).into_diagnostic()?;
+        let client = tx3_sdk::trp::Client::new(tx3_sdk::trp::ClientOptions {
+            endpoint: trp_url.clone(),
+            headers: self.trp_headers.clone(),
+            env_args: None,
+        });
 
-        client
-            .request("trp.resolve", params.to_owned())
-            .await
-            .into_diagnostic()
+        let result = client.resolve(request).await?;
+
+        Ok(result)
+    }
+
+    pub async fn trp_submit(
+        &self,
+        tx: tx3_sdk::trp::TxEnvelope,
+    ) -> Result<tx3_sdk::trp::SubmitResponse> {
+        let Some(trp_url) = &self.trp_url else {
+            bail!("missing TRP configuration for this provider")
+        };
+
+        let client = tx3_sdk::trp::Client::new(tx3_sdk::trp::ClientOptions {
+            endpoint: trp_url.clone(),
+            headers: self.trp_headers.clone(),
+            env_args: None,
+        });
+
+        Ok(client.submit(tx, vec![]).await?)
     }
 }
 

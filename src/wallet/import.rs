@@ -1,7 +1,7 @@
+use anyhow::{bail, Context, Result};
 use chrono::Local;
 use clap::Parser;
 use inquire::list_option::ListOption;
-use miette::{bail, Context, IntoDiagnostic, Result};
 use pallas::crypto::key::ed25519::PublicKey;
 use std::str::FromStr;
 use tracing::instrument;
@@ -26,7 +26,9 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
     let name = match args.name {
         Some(name) => Name::try_from(name)?,
         None => {
-            let name = inquire::Text::new("Name: ").prompt().into_diagnostic()?;
+            let name = inquire::Text::new("Name: ")
+                .prompt()
+                .map_err(anyhow::Error::msg)?;
             Name::try_from(name)?
         }
     };
@@ -42,7 +44,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
             vec![ListOption::new(0, "yes"), ListOption::new(1, "no")],
         )
         .prompt()
-        .into_diagnostic()?
+        .map_err(anyhow::Error::msg)?
         .index
         {
             0 => true,
@@ -55,11 +57,9 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         Some(public_key) => public_key,
         None => inquire::Text::new("Public key: ")
             .prompt()
-            .into_diagnostic()?,
+            .map_err(anyhow::Error::msg)?,
     };
-    let public_key = PublicKey::from_str(&public_key)
-        .into_diagnostic()
-        .context("invalid public key")?;
+    let public_key = PublicKey::from_str(&public_key).context("invalid public key")?;
 
     let wallet = Wallet {
         created: Local::now(),

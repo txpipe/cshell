@@ -1,8 +1,8 @@
 use std::{fmt::Display, sync::Arc, time::Duration};
 
+use anyhow::{Context, Result};
 use backoff::{backoff::Backoff, ExponentialBackoff};
 use futures::{FutureExt, StreamExt};
-use miette::{Context, IntoDiagnostic};
 use pallas::ledger::addresses::Address;
 use ratatui::crossterm::event::Event as CrosstermEvent;
 use tokio::{
@@ -61,11 +61,11 @@ impl EventHandler {
         Self { receiver }
     }
 
-    pub async fn next(&mut self) -> miette::Result<Event> {
+    pub async fn next(&mut self) -> Result<Event> {
         self.receiver
             .recv()
             .await
-            .ok_or(miette::Report::msg("failed to receive event"))
+            .ok_or(anyhow::anyhow!("failed to receive event"))
     }
 }
 
@@ -84,8 +84,8 @@ impl EventTask {
         }
     }
 
-    async fn run(self) -> miette::Result<()> {
-        let keys = async || -> miette::Result<()> {
+    async fn run(self) -> Result<()> {
+        let keys = async || -> Result<()> {
             let mut reader = crossterm::event::EventStream::new();
 
             loop {
@@ -97,10 +97,10 @@ impl EventTask {
 
         let sender = async {
             self.sender.closed().await;
-            Ok::<_, miette::Error>(())
+            Ok::<_, anyhow::Error>(())
         };
 
-        let ticks = async || -> miette::Result<()> {
+        let ticks = async || -> Result<()> {
             let tick_rate = Duration::from_secs(1);
             let mut tick = tokio::time::interval(tick_rate);
             loop {
@@ -115,11 +115,8 @@ impl EventTask {
         Ok(())
     }
 
-    fn send(&self, event: Event) -> miette::Result<()> {
-        self.sender
-            .send(event)
-            .into_diagnostic()
-            .context("sending event")
+    fn send(&self, event: Event) -> Result<()> {
+        self.sender.send(event).context("sending event")
     }
 
     async fn update_balance(&self, address: Address, balance: DetailedBalance) {
@@ -131,11 +128,11 @@ impl EventTask {
             .and_modify(|w| w.balance = balance);
     }
 
-    async fn get_balance(&self, address: &Address) -> miette::Result<DetailedBalance> {
+    async fn get_balance(&self, address: &Address) -> Result<DetailedBalance> {
         self.context.provider.get_detailed_balance(address).await
     }
 
-    async fn check_balances(&self) -> miette::Result<()> {
+    async fn check_balances(&self) -> Result<()> {
         let items: Vec<(Address, DetailedBalance)> = {
             let wallets = self.context.wallets.read().await;
             wallets
@@ -155,12 +152,12 @@ impl EventTask {
         Ok(())
     }
 
-    async fn update_connection(&self, connection: ConnectionState) -> miette::Result<()> {
+    async fn update_connection(&self, connection: ConnectionState) -> Result<()> {
         *self.state.write().await = connection.clone();
         self.send(Event::App(AppEvent::State(connection)))
     }
 
-    async fn run_follow_tip(&self) -> miette::Result<()> {
+    async fn run_follow_tip(&self) -> Result<()> {
         self.update_connection(ConnectionState::Connecting).await?;
 
         let max_elapsed_time = Duration::from_secs(60 * 5);
@@ -194,7 +191,7 @@ impl EventTask {
         Ok(())
     }
 
-    async fn follow_tip(&self) -> miette::Result<()> {
+    async fn follow_tip(&self) -> Result<()> {
         let addresses: Vec<Address> = {
             let wallets = self.context.wallets.read().await;
             wallets.keys().cloned().collect()
@@ -205,11 +202,11 @@ impl EventTask {
         }
 
         let mut client: CardanoSyncClient = self.context.provider.client().await?;
-        let mut tip = client.follow_tip(vec![]).await.into_diagnostic()?;
+        let mut tip = client.follow_tip(vec![]).await?;
 
         self.update_connection(ConnectionState::Connected).await?;
 
-        while let Some(event) = tip.event().await.into_diagnostic()? {
+        while let Some(event) = tip.event().await? {
             match event {
                 TipEvent::Apply(block) => {
                     let header = block.parsed.clone().unwrap().header.unwrap();
@@ -249,6 +246,6 @@ impl EventTask {
             }
         }
 
-        Err(miette::miette!("Tip stream ended unexpectedly"))
+        Err(anyhow::anyhow!("Tip stream ended unexpectedly"))
     }
 }

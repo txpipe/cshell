@@ -1,6 +1,6 @@
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use inquire::MultiSelect;
-use miette::{bail, Context, IntoDiagnostic};
 use serde_json::json;
 use tracing::instrument;
 
@@ -20,10 +20,8 @@ pub struct Args {
 }
 
 #[instrument("sign", skip_all)]
-pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
-    let mut cbor = hex::decode(args.cbor)
-        .into_diagnostic()
-        .context("invalid cbor")?;
+pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
+    let mut cbor = hex::decode(args.cbor).context("invalid cbor")?;
 
     let signers = if args.signer.is_empty() {
         let wallet_names: Vec<String> = ctx
@@ -76,8 +74,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
                         wallet.name
                     ))
                     .with_display_mode(inquire::PasswordDisplayMode::Masked)
-                    .prompt()
-                    .into_diagnostic()?,
+                    .prompt()?,
             ),
         };
 

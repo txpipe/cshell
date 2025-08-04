@@ -21,7 +21,8 @@ pub struct Args {
 enum Commands {
     /// Create a new wallet. Leave arguments blank for interactive mode
     Create(create::Args),
-    /// Restore wallet using BIP39 Mnemonic. Leave arguments blank for interactive mode
+    /// Restore wallet using BIP39 Mnemonic. Leave arguments blank for
+    /// interactive mode
     Restore(restore::Args),
     /// Edit an existing wallet
     Edit(edit::Args),
@@ -38,7 +39,7 @@ enum Commands {
 }
 
 #[instrument("wallet", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     match args.command {
         Commands::Create(args) => create::run(args, ctx).await,
         Commands::Restore(args) => restore::run(args, ctx).await,

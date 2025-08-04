@@ -32,7 +32,7 @@ enum Commands {
 }
 
 #[instrument("wallet", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
     match args.command {
         Commands::Create(args) => create::run(args, ctx).await,
         Commands::Edit(args) => edit::run(args, ctx).await,

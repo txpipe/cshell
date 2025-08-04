@@ -1,5 +1,5 @@
+use anyhow::bail;
 use clap::Parser;
-use miette::bail;
 use tracing::instrument;
 
 use crate::output::OutputFormatter;
@@ -12,7 +12,7 @@ pub struct Args {
 }
 
 #[instrument("info", skip_all, fields(name=args.name))]
-pub async fn run(args: Args, ctx: &crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &crate::Context) -> anyhow::Result<()> {
     let provider = match args.name {
         Some(name) => ctx.store.find_provider(&name),
         None => ctx.store.default_provider(),

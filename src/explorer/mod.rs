@@ -1,9 +1,9 @@
 use std::{cell::RefCell, collections::VecDeque, rc::Rc, sync::Arc};
 
+use anyhow::{bail, Context as _, Result};
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use indexmap::IndexMap;
-use miette::{bail, Context as _, IntoDiagnostic};
 use pallas::ledger::addresses::Address;
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind},
@@ -107,11 +107,10 @@ impl App {
     }
 
     /// Run the application's main loop.
-    pub async fn run(mut self, mut terminal: DefaultTerminal) -> miette::Result<()> {
+    pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         while !self.done {
             terminal
                 .draw(|frame| self.draw(frame))
-                .into_diagnostic()
                 .context("rendering")?;
 
             match self.events.next().await? {
@@ -311,7 +310,7 @@ pub struct ExplorerContext {
     pub wallets: RwLock<IndexMap<Address, ExplorerWallet>>,
 }
 impl ExplorerContext {
-    pub fn new(args: &Args, ctx: &Context) -> miette::Result<Self> {
+    pub fn new(args: &Args, ctx: &Context) -> Result<Self> {
         let provider = match &args.provider {
             Some(name) => match ctx.store.find_provider(name) {
                 Some(provider) => provider.clone(),
@@ -356,7 +355,7 @@ impl ExplorerContext {
     }
 }
 
-pub async fn run(args: Args, ctx: &Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &Context) -> Result<()> {
     let terminal = ratatui::init();
 
     let context: Arc<ExplorerContext> = Arc::new(ExplorerContext::new(&args, ctx)?);
