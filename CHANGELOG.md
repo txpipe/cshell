@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.1] - 2025-08-06
+
+### 🐛 Bug Fixes
+
+- Improve error message reports
+
 ## [0.11.0] - 2025-08-04
 
 ### 🚀 Features
@@ -12,6 +18,10 @@ All notable changes to this project will be documented in this file.
 
 - Remove duplication on invoke cmd (#42)
 - Remove miette in favor of anyhow and a custom render (#43)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.11.0
 
 ## [0.10.0] - 2025-08-01
 
