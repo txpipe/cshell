@@ -5,7 +5,8 @@ use std::io::{self, Write};
 pub struct ErrorReport {
     pub message: String,
     pub kind: String,
-    pub data: HashMap<String, String>,
+    pub details: HashMap<String, String>,
+    pub logs: Vec<String>,
     pub help: Option<String>,
     pub code: Option<u32>,
 }
@@ -15,24 +16,30 @@ impl ErrorReport {
         Self {
             message,
             kind,
-            data: HashMap::new(),
+            details: HashMap::new(),
+            logs: vec![],
             help: None,
             code: None,
         }
     }
 
-    pub fn with_data(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.data.insert(key.into(), value.into());
+    pub fn with_detail(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.details.insert(key.into(), value.into());
         self
     }
 
-    pub fn with_help(mut self, help: String) -> Self {
-        self.help = Some(help);
+    pub fn with_help(mut self, help: impl Into<String>) -> Self {
+        self.help = Some(help.into());
         self
     }
 
     pub fn with_code(mut self, code: u32) -> Self {
         self.code = Some(code);
+        self
+    }
+
+    pub fn with_logs(mut self, logs: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.logs = logs.into_iter().map(|x| x.into()).collect();
         self
     }
 
@@ -44,16 +51,23 @@ impl ErrorReport {
         let _ = writeln!(stderr, "❗️ error: {}", self.message);
 
         // Print additional data if available
-        if !self.data.is_empty() {
+        if !self.details.is_empty() {
             let _ = writeln!(stderr, "   details:");
-            for (key, value) in &self.data {
-                let _ = writeln!(stderr, "     {}: {}", key, value);
+            for (key, value) in &self.details {
+                let _ = writeln!(stderr, "   ∙ {}: {}", key, value);
             }
         }
 
         // Print help message if available
         if let Some(help) = &self.help {
-            let _ = writeln!(stderr, "   💡 {}", help);
+            let _ = writeln!(stderr, "💡 {}", help);
+        }
+
+        if !self.logs.is_empty() {
+            let _ = writeln!(stderr, "   logs:");
+            for log in &self.logs {
+                let _ = writeln!(stderr, "   ‣ {}", log);
+            }
         }
 
         let _ = writeln!(stderr);
@@ -75,8 +89,8 @@ impl std::fmt::Display for ErrorReport {
             write!(f, " [Code: {}]", code)?;
         }
 
-        if !self.data.is_empty() {
-            write!(f, " - Details: {:?}", self.data)?;
+        if !self.details.is_empty() {
+            write!(f, " - Details: {:?}", self.details)?;
         }
 
         if let Some(help) = &self.help {
@@ -92,40 +106,38 @@ impl std::fmt::Display for ErrorReport {
 impl From<tx3_sdk::trp::Error> for ErrorReport {
     fn from(error: tx3_sdk::trp::Error) -> Self {
         match error {
-            tx3_sdk::trp::Error::NetworkError(network_error) => ErrorReport::new(
-                "Network communication error".to_string(),
-                "network".to_string(),
-            )
-            .with_code(1)
-            .with_data("error".to_string(), network_error.to_string()),
-            tx3_sdk::trp::Error::HttpError(status, message) => {
-                ErrorReport::new("HTTP request failed".to_string(), "http".to_string())
-                    .with_code(2)
-                    .with_data("status", status.to_string())
-                    .with_data("message", message)
+            tx3_sdk::trp::Error::NetworkError(err) => {
+                ErrorReport::new(err.to_string(), "network".to_string())
             }
-            tx3_sdk::trp::Error::DeserializationError(deserialization_error) => ErrorReport::new(
-                "Failed to deserialize response".to_string(),
-                "deserialization".to_string(),
-            )
-            .with_code(3)
-            .with_data("error".to_string(), deserialization_error.to_string()),
-            tx3_sdk::trp::Error::GenericRpcError(method, params, value) => {
-                ErrorReport::new("Generic RPC error".to_string(), "rpc".to_string())
-                    .with_data("method".to_string(), method.to_string())
-                    .with_data("parameters".to_string(), format!("{:?}", params))
-                    .with_data("value".to_string(), format!("{:?}", value))
+            tx3_sdk::trp::Error::HttpError(status, message) => {
+                ErrorReport::new(message, "http".to_string())
+                    .with_code(2)
+                    .with_detail("status", status.to_string())
+            }
+            tx3_sdk::trp::Error::DeserializationError(message) => {
+                ErrorReport::new(message, "deserialization".to_string())
+            }
+            tx3_sdk::trp::Error::GenericRpcError(code, message, value) => {
+                ErrorReport::new(message, "trp".to_string())
+                    .with_detail("code".to_string(), code.to_string())
+                    .with_detail(
+                        "data".to_string(),
+                        serde_json::to_string(&value).unwrap_or_default(),
+                    )
             }
             tx3_sdk::trp::Error::UnknownError(message) => {
                 ErrorReport::new("Unknown error occurred".to_string(), "unknown".to_string())
-                    .with_data("message".to_string(), message)
+                    .with_detail("message".to_string(), message)
             }
             tx3_sdk::trp::Error::UnsupportedTir(x) => ErrorReport::new(
-                "Unsupported TIR version or feature".to_string(),
-                "tir".to_string(),
+                "The TIR version is not supported by the server".to_string(),
+                "trp".to_string(),
             )
-            .with_data("expected", x.expected)
-            .with_data("provided", x.provided),
+            .with_detail("expected", x.expected)
+            .with_detail("provided", x.provided)
+            .with_help(
+                "Make sure that the Tx3 version on your machine is compatible with the TRP server.",
+            ),
             tx3_sdk::trp::Error::InvalidTirEnvelope => {
                 ErrorReport::new("Invalid TIR envelope".to_string(), "tir".to_string())
             }
@@ -137,28 +149,28 @@ impl From<tx3_sdk::trp::Error> for ErrorReport {
             }
             tx3_sdk::trp::Error::UnsupportedEra { era } => {
                 ErrorReport::new("Unsupported era".to_string(), "era".to_string())
-                    .with_data("era", era.to_string())
+                    .with_detail("era", era.to_string())
             }
             tx3_sdk::trp::Error::MissingTxArg(x) => ErrorReport::new(
                 "Missing transaction argument".to_string(),
                 "args".to_string(),
             )
-            .with_data("arg", x.key)
-            .with_data("type", x.ty),
+            .with_detail("arg", x.key)
+            .with_detail("type", x.ty),
             tx3_sdk::trp::Error::InputNotResolved(x) => {
                 ErrorReport::new("Input not resolved".to_string(), "input".to_string())
-                    .with_data("input", x.name)
-                    .with_data("query.address", format!("{:?}", x.query.address))
-                    .with_data("query.min_amount", format!("{:?}", x.query.min_amount))
-                    .with_data("query.refs", format!("{:?}", x.query.refs))
-                    .with_data("query.collateral", format!("{}", x.query.collateral))
-                    .with_data("query.support_many", format!("{}", x.query.support_many))
+                    .with_detail("input", x.name)
+                    .with_detail("query.address", format!("{:?}", x.query.address))
+                    .with_detail("query.min_amount", format!("{:?}", x.query.min_amount))
+                    .with_detail("query.refs", format!("{:?}", x.query.refs))
+                    .with_detail("query.collateral", format!("{}", x.query.collateral))
+                    .with_detail("query.support_many", format!("{}", x.query.support_many))
             }
-            tx3_sdk::trp::Error::TxScriptFailure(tx_script_failure) => ErrorReport::new(
+            tx3_sdk::trp::Error::TxScriptFailure(x) => ErrorReport::new(
                 "Transaction script execution failed".to_string(),
                 "script".to_string(),
             )
-            .with_data("script_failure".to_string(), tx_script_failure.to_string()),
+            .with_logs(x.logs),
         }
     }
 }
@@ -166,22 +178,13 @@ impl From<tx3_sdk::trp::Error> for ErrorReport {
 impl From<utxorpc::Error> for ErrorReport {
     fn from(error: utxorpc::Error) -> Self {
         match error {
-            utxorpc::Error::TransportError(transport_error) => {
-                ErrorReport::new("Transport error".to_string(), "transport".to_string())
-                    .with_code(20)
-                    .with_data("error".to_string(), transport_error.to_string())
+            utxorpc::Error::TransportError(err) => {
+                ErrorReport::new(err.to_string(), "transport".to_string())
             }
             utxorpc::Error::GrpcError(status) => {
-                ErrorReport::new("gRPC error".to_string(), "grpc".to_string())
-                    .with_code(21)
-                    .with_data("status_message".to_string(), status.message().to_string())
-                    .with_data("status_code".to_string(), format!("{}", status.code()))
+                ErrorReport::new(status.message().to_string(), "grpc".to_string())
             }
-            utxorpc::Error::ParseError(parse_error) => {
-                ErrorReport::new("Parse error".to_string(), "parse".to_string())
-                    .with_code(22)
-                    .with_data("error".to_string(), parse_error.to_string())
-            }
+            utxorpc::Error::ParseError(message) => ErrorReport::new(message, "parse".to_string()),
         }
     }
 }
