@@ -1,12 +1,13 @@
+use anyhow::bail;
 use chrono::{DateTime, Local};
-use miette::{bail, IntoDiagnostic};
+use num_format::{Locale, ToFormattedString};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Name(String);
 impl TryFrom<String> for Name {
-    type Error = miette::Error;
+    type Error = anyhow::Error;
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if value.is_empty() {
             bail!("Value cannot be empty.")
@@ -15,7 +16,7 @@ impl TryFrom<String> for Name {
     }
 }
 impl TryFrom<&str> for Name {
-    type Error = miette::Error;
+    type Error = anyhow::Error;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let value = value.to_string();
         if value.is_empty() {
@@ -43,11 +44,28 @@ impl std::fmt::Display for Name {
     }
 }
 
+pub trait AdaFormat {
+    fn format_ada(self) -> String;
+}
+impl AdaFormat for u64 {
+    fn format_ada(self) -> String {
+        let decimals = 6;
+        let factor = 10u64.pow(decimals);
+        let whole = self / factor;
+        let fraction = self % factor;
+
+        let whole_str = whole.to_formatted_string(&Locale::en);
+        let fraction_str = format!("{:0width$}", fraction, width = decimals as usize);
+
+        format!("{whole_str}.{fraction_str}")
+    }
+}
+
 pub fn show_is_current(option: impl std::fmt::Display, is_current: bool) -> String {
     if is_current {
-        format!("{} (current)", option)
+        format!("{option} (current)")
     } else {
-        format!("{}", option)
+        format!("{option}")
     }
 }
 
@@ -58,31 +76,32 @@ pub fn pretty_print_date(date: &DateTime<Local>) -> String {
     date.format(DATE_FORMAT).to_string()
 }
 
-pub fn read_toml<T>(path: &std::path::Path) -> miette::Result<Option<T>>
+pub fn read_toml<T>(path: &std::path::Path) -> anyhow::Result<Option<T>>
 where
     T: DeserializeOwned,
 {
     let has_toml_ext = path.extension() == Some("toml".as_ref());
     if path.is_file() && has_toml_ext {
-        let contents: Vec<u8> = std::fs::read(path).into_diagnostic()?;
-        let contents: String = String::from_utf8(contents).into_diagnostic()?;
+        let contents: Vec<u8> = std::fs::read(path)?;
+        let contents: String = String::from_utf8(contents)?;
 
-        let t = toml::from_str::<T>(&contents).into_diagnostic()?;
+        let t = toml::from_str::<T>(&contents)?;
         Ok(Some(t))
     } else {
         Ok(None)
     }
 }
 
-pub fn write_toml<T>(path: &std::path::Path, t: &T) -> miette::Result<()>
+pub fn write_toml<T>(path: &std::path::Path, t: &T) -> anyhow::Result<()>
 where
     T: Serialize,
 {
-    let contents = toml::to_string(t).into_diagnostic()?;
+    let contents = toml::to_string(t)?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).into_diagnostic()?;
+        std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, contents).into_diagnostic()
+    std::fs::write(path, contents)?;
+    Ok(())
 }
 
 pub fn clip(input: impl ToString, len: usize) -> String {
@@ -103,7 +122,7 @@ pub fn clip(input: impl ToString, len: usize) -> String {
     let first_part: String = input.chars().take(first_half_len).collect();
     let last_part: String = input.chars().skip(input.len() - second_half_len).collect();
 
-    format!("{}...{}", first_part, last_part)
+    format!("{first_part}...{last_part}")
 }
 
 // Helper functions for serializing Option<Vec<u8>> as hex

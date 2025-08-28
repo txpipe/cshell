@@ -1,3 +1,4 @@
+use anyhow::{bail, Context, Result};
 use bech32::{FromBase32, ToBase32};
 use bip39::rand_core::{CryptoRng, RngCore};
 use bip39::{Language, Mnemonic};
@@ -7,7 +8,6 @@ use cryptoxide::chacha20poly1305::ChaCha20Poly1305;
 use cryptoxide::kdf::argon2;
 use cryptoxide::{hmac::Hmac, pbkdf2::pbkdf2, sha2::Sha512};
 use ed25519_bip32::{self, XPrv, XPub, XPRV_SIZE};
-use miette::{bail, Context, IntoDiagnostic};
 use pallas::{
     codec::{minicbor, utils::NonEmptySet},
     crypto::key::ed25519::{self, PublicKey, SecretKey, SecretKeyExtended, Signature},
@@ -57,7 +57,7 @@ impl Wallet {
         password: &str,
         is_default: bool,
         is_unsafe: bool,
-    ) -> miette::Result<NewWallet> {
+    ) -> Result<NewWallet> {
         let (private_key, mnemonic) =
             Bip32PrivateKey::generate_with_mnemonic(OsRng, password.to_string());
         let public_key = private_key.to_public().as_bytes();
@@ -88,7 +88,7 @@ impl Wallet {
         mnemonic: &str,
         is_default: bool,
         is_unsafe: bool,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self> {
         let private_key =
             Bip32PrivateKey::from_bip39_mnenomic(mnemonic.to_string(), password.to_string())?;
         let public_key = private_key.to_public().as_bytes();
@@ -134,7 +134,7 @@ impl Wallet {
         }
     }
 
-    pub fn sign(&self, tx: Vec<u8>, password: &Option<String>) -> Result<Vec<u8>, miette::Error> {
+    pub fn sign(&self, tx: Vec<u8>, password: &Option<String>) -> Result<Vec<u8>, anyhow::Error> {
         let Some(private_key) = &self.private_key else {
             bail!("cant sign tx with RO wallet")
         };
@@ -143,7 +143,7 @@ impl Wallet {
             bail!("safe wallets require password")
         }
 
-        let mut decoded: Tx = minicbor::decode(&tx).into_diagnostic()?;
+        let mut decoded: Tx = minicbor::decode(&tx)?;
 
         let private_key = match password {
             Some(password) => decrypt_private_key(password, private_key.to_vec())?,
@@ -347,7 +347,7 @@ impl From<SecretKeyExtended> for PrivateKey {
 }
 
 impl TryFrom<&[u8]> for PrivateKey {
-    type Error = miette::Error;
+    type Error = anyhow::Error;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         match value.len() {
@@ -360,12 +360,11 @@ impl TryFrom<&[u8]> for PrivateKey {
             SecretKeyExtended::SIZE => {
                 let mut buf = [0u8; SecretKeyExtended::SIZE];
                 buf.copy_from_slice(value);
-                let secret_key = SecretKeyExtended::from_bytes(buf)
-                    .into_diagnostic()
-                    .context("decoding secret key")?;
+                let secret_key =
+                    SecretKeyExtended::from_bytes(buf).context("decoding secret key")?;
                 Ok(secret_key.into())
             }
-            _ => miette::bail!("Invalid key length: {}", value.len()),
+            _ => bail!("Invalid key length: {}", value.len()),
         }
     }
 }
@@ -405,10 +404,9 @@ impl Bip32PrivateKey {
         (Self(XPrv::normalize_bytes_force3rd(pbkdf2_result)), bip39)
     }
 
-    pub fn from_bytes(bytes: [u8; 96]) -> miette::Result<Self> {
+    pub fn from_bytes(bytes: [u8; 96]) -> Result<Self> {
         XPrv::from_bytes_verified(bytes)
             .map(Self)
-            .into_diagnostic()
             .context("xprv error")
     }
 
@@ -416,10 +414,8 @@ impl Bip32PrivateKey {
         self.0.as_ref().to_vec()
     }
 
-    pub fn from_bip39_mnenomic(mnemonic: String, password: String) -> miette::Result<Self> {
-        let bip39 = Mnemonic::parse(mnemonic)
-            .into_diagnostic()
-            .context("Error parsing mnemonic")?;
+    pub fn from_bip39_mnenomic(mnemonic: String, password: String) -> Result<Self> {
+        let bip39 = Mnemonic::parse(mnemonic).context("Error parsing mnemonic")?;
         let entropy = bip39.to_entropy();
 
         let mut pbkdf2_result = [0; XPRV_SIZE];
@@ -461,19 +457,15 @@ impl Bip32PrivateKey {
         .unwrap()
     }
 
-    pub fn from_bech32(bech32: String) -> miette::Result<Self> {
-        let (hrp, data, _) = bech32::decode(&bech32)
-            .into_diagnostic()
-            .context("Invalid bech32")?;
+    pub fn from_bech32(bech32: String) -> Result<Self> {
+        let (hrp, data, _) = bech32::decode(&bech32).context("Invalid bech32")?;
         if hrp != Self::BECH32_HRP {
-            miette::bail!("Invalid bech32")
+            bail!("Invalid bech32")
         } else {
-            let data = Vec::<u8>::from_base32(&data)
-                .into_diagnostic()
-                .context("Invalid bech32")?;
+            let data = Vec::<u8>::from_base32(&data).context("Invalid bech32")?;
             match data.try_into() {
                 Ok(bytes) => Self::from_bytes(bytes),
-                Err(_) => miette::bail!("Unexpected Bech32 length"),
+                Err(_) => bail!("Unexpected Bech32 length"),
             }
         }
     }
@@ -494,11 +486,10 @@ impl Bip32PublicKey {
         self.0.as_ref().to_vec()
     }
 
-    pub fn derive(&self, index: u32) -> miette::Result<Self> {
+    pub fn derive(&self, index: u32) -> Result<Self> {
         self.0
             .derive(ed25519_bip32::DerivationScheme::V2, index)
             .map(Self)
-            .into_diagnostic()
             .context("Failed to derive key")
     }
 
@@ -519,19 +510,15 @@ impl Bip32PublicKey {
         .unwrap()
     }
 
-    pub fn from_bech32(bech32: String) -> miette::Result<Self> {
-        let (hrp, data, _) = bech32::decode(&bech32)
-            .into_diagnostic()
-            .context("Invalid Bech32")?;
+    pub fn from_bech32(bech32: String) -> Result<Self> {
+        let (hrp, data, _) = bech32::decode(&bech32).context("Invalid Bech32")?;
         if hrp != Self::BECH32_HRP {
-            Err(miette::diagnostic!("Invalid Bech32").into())
+            Err(anyhow::anyhow!("Invalid Bech32"))
         } else {
-            let data = Vec::<u8>::from_base32(&data)
-                .into_diagnostic()
-                .context("Invalid Bech32")?;
+            let data = Vec::<u8>::from_base32(&data).context("Invalid Bech32")?;
             match data.try_into() {
                 Ok(bytes) => Ok(Self::from_bytes(bytes)),
-                Err(_) => miette::bail!("Unexpected Bech32 length"),
+                Err(_) => bail!("Unexpected Bech32 length"),
             }
         }
     }
@@ -586,7 +573,7 @@ where
 }
 
 #[allow(unused)]
-pub fn decrypt_private_key(password: &String, data: Vec<u8>) -> miette::Result<PrivateKey> {
+pub fn decrypt_private_key(password: &String, data: Vec<u8>) -> Result<PrivateKey> {
     let data_len_without_ct = VERSION_SIZE + SALT_SIZE + NONCE_SIZE + TAG_SIZE;
 
     let ciphertext_len = if data.len() == (data_len_without_ct + SecretKey::SIZE) {
@@ -594,7 +581,7 @@ pub fn decrypt_private_key(password: &String, data: Vec<u8>) -> miette::Result<P
     } else if data.len() == (data_len_without_ct + SecretKeyExtended::SIZE) {
         SecretKeyExtended::SIZE
     } else {
-        miette::bail!("Invalid wrapper size")
+        bail!("Invalid wrapper size")
     };
 
     let mut cursor = 0;
@@ -632,20 +619,19 @@ pub fn decrypt_private_key(password: &String, data: Vec<u8>) -> miette::Result<P
 
                 Ok(secret_key.into())
             } else {
-                Err(miette::bail!("Wrapper data failed to decrypt"))
+                Err(bail!("Wrapper data failed to decrypt"))
             }
         }
         SecretKeyExtended::SIZE => {
             let mut plaintext = [0u8; SecretKeyExtended::SIZE];
 
             if chacha20.decrypt(ciphertext, &mut plaintext, tag) {
-                let secret_key = SecretKeyExtended::from_bytes(plaintext)
-                    .into_diagnostic()
-                    .context("decoding secret key")?;
+                let secret_key =
+                    SecretKeyExtended::from_bytes(plaintext).context("decoding secret key")?;
 
                 Ok(secret_key.into())
             } else {
-                Err(miette::bail!("Wrapper data failed to decrypt"))
+                Err(bail!("Wrapper data failed to decrypt"))
             }
         }
         _ => unreachable!(),

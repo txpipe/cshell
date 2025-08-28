@@ -1,4 +1,4 @@
-use miette::bail;
+use anyhow::bail;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -21,7 +21,7 @@ pub struct StoreInner {
 }
 
 impl Store {
-    pub fn open(path: Option<PathBuf>) -> miette::Result<Self> {
+    pub fn open(path: Option<PathBuf>) -> anyhow::Result<Self> {
         let path = path.unwrap_or({
             // Get the home directory.  This is platform-dependent.
             let home_dir = match std::env::var("HOME") {
@@ -41,7 +41,7 @@ impl Store {
         Ok(Self { path, inner })
     }
 
-    pub fn write(&self) -> miette::Result<()> {
+    pub fn write(&self) -> anyhow::Result<()> {
         write_toml(&self.path, &self.inner)
     }
 
@@ -49,12 +49,12 @@ impl Store {
         self.inner.wallets.iter().find(|wallet| wallet.is_default)
     }
 
-    pub fn add_wallet(&mut self, wallet: &Wallet) -> miette::Result<()> {
+    pub fn add_wallet(&mut self, wallet: &Wallet) -> anyhow::Result<()> {
         self.inner.wallets.push(wallet.clone());
         self.write()
     }
 
-    pub fn remove_wallet(&mut self, wallet: Wallet) -> miette::Result<()> {
+    pub fn remove_wallet(&mut self, wallet: Wallet) -> anyhow::Result<()> {
         match self.inner.wallets.iter().position(|x| *x == wallet) {
             Some(idx) => {
                 self.inner.wallets.remove(idx);
@@ -86,7 +86,7 @@ impl Store {
         &self.inner.providers
     }
 
-    pub fn add_provider(&mut self, provider: &Provider) -> miette::Result<()> {
+    pub fn add_provider(&mut self, provider: &Provider) -> anyhow::Result<()> {
         self.inner.providers.push(provider.clone());
         self.write()
     }
@@ -95,7 +95,7 @@ impl Store {
         self.inner.providers.iter().find(|p| p.name() == name)
     }
 
-    pub fn remove_provider(&mut self, provider: Provider) -> miette::Result<()> {
+    pub fn remove_provider(&mut self, provider: Provider) -> anyhow::Result<()> {
         match self.inner.providers.iter().position(|x| *x == provider) {
             Some(idx) => {
                 self.inner.providers.remove(idx);

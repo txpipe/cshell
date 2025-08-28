@@ -1,4 +1,4 @@
-use miette::{Context, IntoDiagnostic};
+use anyhow::{Context, Result};
 use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,28 +22,26 @@ pub struct UTxORPCProvider {
 }
 
 impl UTxORPCProvider {
-    pub async fn client<T>(&self) -> miette::Result<T>
+    pub async fn client<T>(&self) -> Result<T>
     where
         T: From<InnerService>,
     {
-        let mut client_builder = ClientBuilder::new()
-            .uri(self.url.clone())
-            .into_diagnostic()?;
+        let mut client_builder = ClientBuilder::new().uri(self.url.clone())?;
 
         if let Some(headers) = &self.headers {
             for (k, v) in headers {
-                client_builder = client_builder.metadata(k, v).into_diagnostic()?;
+                client_builder = client_builder.metadata(k, v)?;
             }
         }
         Ok(client_builder.build::<T>().await)
     }
 
-    pub async fn get_tip(&self) -> miette::Result<Option<BlockRef>> {
+    pub async fn get_tip(&self) -> Result<Option<BlockRef>> {
         let mut client: CardanoSyncClient = self.client().await?;
-        client.read_tip().await.into_diagnostic()
+        client.read_tip().await
     }
 
-    pub async fn test(&self) -> miette::Result<()> {
+    pub async fn test(&self) -> Result<()> {
         println!("Executing ReadTip method...");
         match self.get_tip().await? {
             Some(blockref) => {
@@ -59,7 +57,7 @@ impl UTxORPCProvider {
         Ok(())
     }
 
-    pub async fn get_balance(&self, address: &Address) -> miette::Result<Balance> {
+    pub async fn get_balance(&self, address: &Address) -> Result<Balance> {
         let mut client: CardanoQueryClient = self.client().await?;
 
         let predicate = utxorpc::spec::query::UtxoPredicate {
@@ -79,7 +77,6 @@ impl UTxORPCProvider {
         let utxos = client
             .search_utxos(predicate, None, u32::MAX)
             .await
-            .into_diagnostic()
             .context("failed to query utxos")?;
 
         let coin: u64 = utxos
@@ -139,7 +136,7 @@ impl UTxORPCProvider {
         })
     }
 
-    pub async fn get_detailed_balance(&self, address: &Address) -> miette::Result<DetailedBalance> {
+    pub async fn get_detailed_balance(&self, address: &Address) -> Result<DetailedBalance> {
         let mut client: CardanoQueryClient = self.client().await?;
 
         let predicate = utxorpc::spec::query::UtxoPredicate {
@@ -159,7 +156,6 @@ impl UTxORPCProvider {
         let utxos = client
             .search_utxos(predicate, None, u32::MAX)
             .await
-            .into_diagnostic()
             .context("failed to query utxos")?;
 
         let mut result = utxos

@@ -1,8 +1,8 @@
 [package]
 name = "cshell"
-version = "0.5.0"
+version = "0.11.1"
 edition = "2021"
-rust-version = "1.82.0"
+rust-version = "1.88.0"
 authors = ["TxPipe <hello@txpipe.io>"]
 description = "A Cardano wallet CLI built for developers."
 readme = "README.md"
@@ -14,6 +14,22 @@ keywords = ["cardano", "blockchain", "wallet", "cardano"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
 
 [dependencies]
+tx3-lang = "0.11.1"
+tx3-cardano = "0.11.1"
+tx3-sdk = "^0"
+
+# tx3-lang = { git = "https://github.com/tx3-lang/tx3.git" }
+# tx3-cardano = { git = "https://github.com/tx3-lang/tx3.git" }
+# tx3-sdk = { git = "https://github.com/tx3-lang/rust-sdk.git" }
+
+# tx3-lang = { path = "../../tx3-lang/tx3/crates/tx3-lang" }
+# tx3-cardano = { path = "../../tx3-lang/tx3/crates/tx3-cardano" }
+# tx3-sdk = { path = "../../tx3-lang/rust-sdk/sdk" }
+
+utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
+# utxorpc = "0.10.0"
+# utxorpc = { path = "../../../utxorpc/rust-sdk" }
+
 bech32 = "0.9.1"
 bip39 = { version = "2.0.0", features = ["rand_core"] }
 chrono = { version = "0.4.39", features = ["serde"] }
@@ -26,7 +42,6 @@ futures = "0.3.31"
 hex = { version = "0.4.3", features = ["serde"] }
 inquire = "0.7.4"
 jsonrpsee = { version = "0", features = ["client"] }
-miette = { version = "7.2.0", features = ["fancy"] }
 pallas = { version = "1.0.0-alpha.2", features = ["hardano"] }
 prost = "0.13.5"
 rand = "0.8.5"
@@ -42,10 +57,14 @@ tokio-stream = "0.1.17"
 toml = "0.8.20"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-tx3-lang = "0.4.0"
-tx3-cardano = "0.4.0"
+
 url = { version = "2.5.0", features = ["serde"] }
 regex = "1.11.1"
+backoff = "0.4.0"
+indexmap = "2.10.0"
+num-format = "0.4.4"
+tui-tree-widget = "0.23.1"
+anyhow = "1.0.98"
 
 # utxorpc = "0.10.0"
 utxorpc = { path = "../../../utxorpc/rust-sdk" } 

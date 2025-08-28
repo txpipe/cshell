@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::{
-    explorer::{App, SelectedTab},
+    explorer::{event::ConnectionState, App, SelectedTab},
     provider::types::Provider,
 };
 
@@ -16,6 +16,7 @@ pub struct Header {
     pub selected_tab: SelectedTab,
     pub tip: Option<u64>,
     pub provider: Provider,
+    pub app_state: ConnectionState,
 }
 impl From<&App> for Header {
     fn from(value: &App) -> Self {
@@ -23,6 +24,7 @@ impl From<&App> for Header {
             selected_tab: value.selected_tab.clone(),
             tip: value.chain.tip,
             provider: value.context.provider.clone(),
+            app_state: value.app_state.clone(),
         }
     }
 }
@@ -53,21 +55,25 @@ impl Widget for Header {
             )
             .render(title_area, buf);
 
-        let name = Paragraph::new(match self.tip {
-            Some(tip) => vec![
-                Line::from(" CShell Explorer ".to_string()),
-                Line::from(format!(" Tip: {} ", tip)),
-                Line::from(format!(" Provider: {} ", self.provider.name())),
-            ],
-            None => vec![Line::from(" CShell Explorer ".to_string())],
-        })
-        .centered()
-        .block(
-            Block::bordered()
-                .border_style(Style::new().blue())
-                .title(" Provider "),
-        )
-        .style(Style::default().fg(ratatui::style::Color::Blue));
+        let tip = self.tip.map(|tip| tip.to_string()).unwrap_or("-".into());
+        let text = vec![
+            Line::from(format!(" Provider: {} ", self.provider.name())),
+            Line::from(format!(" Status..: {} ", self.app_state)),
+            Line::from(format!(" Tip.....: {tip} ")),
+        ];
+
+        let (color, style) = match self.app_state {
+            ConnectionState::Connected => (Color::Blue, Style::new().blue()),
+            ConnectionState::Retrying | ConnectionState::Connecting => {
+                (Color::Yellow, Style::new().yellow())
+            }
+            ConnectionState::Disconnected => (Color::Red, Style::new().red()),
+        };
+
+        let name = Paragraph::new(text)
+            .block(Block::bordered().border_style(style).title(" Connection "))
+            .style(Style::default().fg(color));
+
         name.render(provider_area, buf);
     }
 }

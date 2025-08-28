@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
@@ -10,9 +9,8 @@ use ratatui::widgets::{
     StatefulWidget, Table, TableState, Widget,
 };
 
-use crate::explorer::{App, ExplorerContext};
-use crate::types::DetailedBalance;
-use crate::utils::clip;
+use crate::explorer::{ExplorerContext, ExplorerWallet};
+use crate::utils::{clip, AdaFormat};
 
 #[derive(Default)]
 pub struct AccountsTabState {
@@ -57,14 +55,10 @@ impl AccountsTabState {
 #[derive(Clone)]
 pub struct AccountsTab {
     pub context: Arc<ExplorerContext>,
-    pub balances: HashMap<String, DetailedBalance>,
 }
-impl From<&App> for AccountsTab {
-    fn from(value: &App) -> Self {
-        Self {
-            context: value.context.clone(),
-            balances: value.chain.balances.clone(),
-        }
+impl AccountsTab {
+    pub fn new(context: Arc<ExplorerContext>) -> Self {
+        Self { context }
     }
 }
 
@@ -85,18 +79,18 @@ impl StatefulWidget for AccountsTab {
 
         let block = Block::bordered().title(Line::raw(" Accounts ").centered());
 
-        let items: Vec<ListItem> = self
-            .context
-            .store
-            .wallets()
+        let guard = tokio::task::block_in_place(|| self.context.wallets.blocking_read());
+        let wallets: Vec<(String, ExplorerWallet)> = guard
             .iter()
-            .map(|wallet| {
+            .map(|(address, wallet)| (address.to_string(), wallet.clone()))
+            .collect();
+
+        let items: Vec<ListItem> = wallets
+            .iter()
+            .map(|(address, wallet)| {
                 ListItem::new(vec![
                     Line::styled(wallet.name.to_string(), Color::Gray),
-                    Line::styled(
-                        clip(wallet.address(self.context.provider.is_testnet()), 20),
-                        Color::DarkGray,
-                    ),
+                    Line::styled(clip(address, 20), Color::DarkGray),
                 ])
             })
             .collect();
@@ -111,30 +105,25 @@ impl StatefulWidget for AccountsTab {
 
         // Handle details area:
         if let Some(i) = state.list_state.selected() {
-            let wallet =
-                self.context.store.wallets()[i % self.context.store.wallets().len()].clone();
-            let key = wallet
-                .address(self.context.provider.is_testnet())
-                .to_string();
+            let index = i % wallets.len();
+            let (address, wallet) = &wallets[index];
 
-            let balance = self.balances.get(&key);
             let mut details = vec![
                 Line::styled(
                     format!("{} wallet", wallet.name),
                     (Color::White, Modifier::UNDERLINED),
                 ),
-                Line::styled(format!("Address: {}", &key), Color::White),
+                Line::styled(format!("Address: {}", &address), Color::White),
             ];
-            if let Some(balance) = balance {
-                let coin: u64 = balance
-                    .iter()
-                    .map(|utxo| utxo.coin.parse::<u64>().unwrap())
-                    .sum();
-                details.push(Line::styled(
-                    format!("Balance: {} Lovelace", coin),
-                    Color::White,
-                ));
-            }
+
+            let coin: u64 = wallet
+                .balance
+                .iter()
+                .map(|utxo| utxo.coin.parse::<u64>().unwrap())
+                .sum();
+            let coin = coin.format_ada();
+
+            details.push(Line::styled(format!("Balance: {coin}"), Color::White));
 
             Block::bordered()
                 .title(" Details ")
@@ -149,19 +138,23 @@ impl StatefulWidget for AccountsTab {
                 .render(summary_area, buf);
 
             // UTXOs table
-            let Some(balance) = balance else { return };
-            let header = ["Transaction", "Index", "Coin", "Assets", "Datum"]
+            let header = ["Utxo Ref", "Coin", "Assets", "Datum"]
                 .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
                 .style(Style::default().fg(Color::Green).bold())
                 .height(1);
 
-            let rows = balance.iter().map(|utxo| {
+            let rows = wallet.balance.iter().map(|utxo| {
+                let coin = utxo
+                    .coin
+                    .parse::<u64>()
+                    .map(|v| v.format_ada())
+                    .unwrap_or(utxo.coin.clone());
+
                 Row::new(vec![
-                    format!("\n{}\n", hex::encode(&utxo.tx)),
-                    format!("\n{}\n", utxo.tx_index),
-                    format!("\n{}\n", utxo.coin),
+                    format!("\n{}#{}\n", hex::encode(&utxo.tx), utxo.tx_index),
+                    format!("\n{coin}\n"),
                     format!("\n{}\n", utxo.assets.len()),
                     format!(
                         "\n{}\n",
@@ -179,8 +172,7 @@ impl StatefulWidget for AccountsTab {
                 rows,
                 [
                     Constraint::Length(70),
-                    Constraint::Length(6),
-                    Constraint::Length(20),
+                    Constraint::Length(25),
                     Constraint::Length(8),
                     Constraint::Fill(1),
                 ],

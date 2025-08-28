@@ -64,7 +64,7 @@ impl OutputFormatter for Balance {
                     ]);
                 }
             }
-            println!("{}", table);
+            println!("{table}");
         }
 
         if !self.datums.is_empty() {
@@ -78,7 +78,7 @@ impl OutputFormatter for Balance {
             for datum in &self.datums {
                 table.add_row(vec![hex::encode(&datum.hash)]);
             }
-            println!("{}", table);
+            println!("{table}");
         }
     }
 
@@ -118,7 +118,7 @@ impl OutputFormatter for DetailedBalance {
                         ]);
                     }
                 }
-                println!("{}", table);
+                println!("{table}");
             }
         }
     }

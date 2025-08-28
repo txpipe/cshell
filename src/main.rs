@@ -2,12 +2,14 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::{borrow::Borrow, path::PathBuf};
 use tracing_subscriber::{filter::LevelFilter, prelude::*};
 
+use crate::reports::ErrorReport;
+
 mod explorer;
 mod output;
 mod provider;
-mod search;
+mod reports;
 mod store;
-mod transaction;
+mod tx;
 mod types;
 mod utils;
 
@@ -54,8 +56,8 @@ enum Commands {
     Provider(provider::Args),
 
     /// Manage Transactions
-    #[command(alias = "tx")]
-    Transaction(transaction::Args),
+    #[command(alias = "transaction")]
+    Tx(tx::Args),
 
     /// Manage Wallets
     Wallet(wallet::Args),
@@ -94,8 +96,9 @@ pub struct Context {
     pub output_format: output::OutputFormat,
     pub log_level: LogLevel,
 }
+
 impl Context {
-    fn from_cli(cli: &Cli) -> miette::Result<Self> {
+    fn from_cli(cli: &Cli) -> anyhow::Result<Self> {
         let store = store::Store::open(cli.store_path.clone())?;
         let output_format = cli
             .output_format
@@ -120,19 +123,33 @@ impl Context {
     }
 }
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> miette::Result<()> {
+async fn run_command() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
     let mut ctx = Context::from_cli(&cli)?;
     ctx.with_tracing();
 
-    match cli.command {
-        Commands::Provider(args) => provider::run(args, &mut ctx).await?,
-        Commands::Transaction(args) => transaction::run(args, &ctx).await?,
-        Commands::Wallet(args) => wallet::run(args, &mut ctx).await?,
-        Commands::Explorer(args) => explorer::run(args, &ctx).await?,
-        Commands::Search(args) => search::run(args, &mut ctx).await?,
+    let result = match cli.command {
+        Commands::Provider(args) => provider::run(args, &mut ctx).await,
+        Commands::Tx(args) => tx::run(args, &ctx).await,
+        Commands::Wallet(args) => wallet::run(args, &mut ctx).await,
+        Commands::Explorer(args) => explorer::run(args, &ctx).await,
     };
 
-    ctx.store.write()
+    ctx.store.write()?;
+
+    result
+}
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    let result = run_command().await;
+
+    if let Err(error) = result {
+        let report = ErrorReport::from(error);
+        report.print();
+        std::process::exit(1);
+    }
+
+    std::process::exit(0);
 }

@@ -1,7 +1,7 @@
+use anyhow::{bail, Result};
 use chrono::Local;
 use clap::Parser;
 use inquire::list_option::ListOption;
-use miette::{bail, IntoDiagnostic, Result};
 use tracing::instrument;
 
 use crate::{
@@ -40,8 +40,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         None => {
             let new_name = inquire::Text::new("New name: ")
                 .with_default(&wallet.name)
-                .prompt()
-                .into_diagnostic()?;
+                .prompt()?;
             Name::try_from(new_name)?
         }
     };
@@ -55,8 +54,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
                 ListOption::new(1, show_is_current("no", wallet.is_default).as_str()),
             ],
         )
-        .prompt()
-        .into_diagnostic()?
+        .prompt()?
         .index
         {
             0 => true,
