@@ -8,7 +8,7 @@ description = "A Cardano wallet CLI built for developers."
 readme = "README.md"
 repository = "https://github.com/txpipe/cshell"
 license = "Apache-2.0"
-jomepage = "https://docs.txpipe.io/cshell"
+homepage = "https://docs.txpipe.io/cshell"
 
 keywords = ["cardano", "blockchain", "wallet", "cardano"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
@@ -65,7 +65,6 @@ indexmap = "2.10.0"
 num-format = "0.4.4"
 tui-tree-widget = "0.23.1"
 anyhow = "1.0.98"
-
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
