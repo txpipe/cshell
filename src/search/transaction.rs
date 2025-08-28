@@ -1,5 +1,5 @@
+use anyhow::{bail, Context, Result};
 use clap::Parser;
-use miette::{bail, Context, IntoDiagnostic, Result};
 use tracing::instrument;
 
 use crate::output::OutputFormatter;
@@ -26,15 +26,11 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         bail!("Provider not found")
     };
 
-    let hash = hex::decode(args.hash)
-        .into_diagnostic()
-        .context("invalid transaction hash")?;
+    let hash = hex::decode(args.hash).context("invalid transaction hash")?;
 
     match provider.fetch_tx(hash).await? {
         Some(v) => {
-            if let Some(block) = v.block {
-                vec![block].output(&ctx.output_format)
-            }
+            v.output(&ctx.output_format);
         }
         None => bail!("transaction hash not found"),
     }

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use clap::{command, Parser, Subcommand};
 use comfy_table::Table;
 use tracing::instrument;
@@ -24,7 +25,7 @@ enum Commands {
 }
 
 #[instrument("search", skip_all)]
-pub async fn run(args: Args, ctx: &mut crate::Context) -> miette::Result<()> {
+pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
     match args.command {
         Commands::Block(args) => block::run(args, ctx).await,
         Commands::Transaction(args) => transaction::run(args, ctx).await,
@@ -149,5 +150,38 @@ impl OutputFormatter for Vec<query::AnyChainBlock> {
             "{}",
             serde_json::to_string_pretty(&result.unwrap()).unwrap()
         );
+    }
+}
+
+impl OutputFormatter for query::AnyChainTx {
+    fn to_table(&self) {
+        if let Some(chain) = &self.chain {
+            match chain {
+                query::any_chain_tx::Chain::Cardano(tx) => {
+                    let block_hash = self.block_ref.as_ref().unwrap().hash.clone();
+                    let table = cardano_tx_table(block_hash.into(), &[tx.clone()]);
+                    println!("{table}");
+                }
+            }
+        }
+    }
+
+    fn to_json(&self) {
+        if let Some(chain) = &self.chain {
+            match chain {
+                query::any_chain_tx::Chain::Cardano(tx) => {
+                    let result = serde_json::to_value(tx);
+                    if let Err(err) = result {
+                        eprintln!("{err}");
+                        return;
+                    }
+
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&result.unwrap()).unwrap()
+                    );
+                }
+            }
+        }
     }
 }

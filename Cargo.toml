@@ -26,9 +26,9 @@ tx3-sdk = "^0"
 # tx3-cardano = { path = "../../tx3-lang/tx3/crates/tx3-cardano" }
 # tx3-sdk = { path = "../../tx3-lang/rust-sdk/sdk" }
 
-utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
+# utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
 # utxorpc = "0.10.0"
-# utxorpc = { path = "../../../utxorpc/rust-sdk" }
+utxorpc = { path = "../../../utxorpc/rust-sdk" }
 
 bech32 = "0.9.1"
 bip39 = { version = "2.0.0", features = ["rand_core"] }
@@ -65,9 +65,6 @@ indexmap = "2.10.0"
 num-format = "0.4.4"
 tui-tree-widget = "0.23.1"
 anyhow = "1.0.98"
-
-# utxorpc = "0.10.0"
-utxorpc = { path = "../../../utxorpc/rust-sdk" } 
 
 
 # The profile that 'cargo dist' will build with

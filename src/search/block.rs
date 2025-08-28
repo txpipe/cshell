@@ -1,5 +1,5 @@
+use anyhow::{bail, Result};
 use clap::Parser;
-use miette::{bail, IntoDiagnostic, Result};
 use regex::Regex;
 use tracing::instrument;
 
@@ -27,7 +27,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         bail!("Provider not found")
     };
 
-    let ref_regex = Regex::new(r"(.+),(\d+)").into_diagnostic()?;
+    let ref_regex = Regex::new(r"(.+),(\d+)")?;
 
     let refs = args
         .refs
@@ -35,17 +35,12 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         .map(|r| {
             let captures = ref_regex
                 .captures(r)
-                .ok_or_else(|| miette::Error::msg(format!("Invalid reference format: {r}")))?;
+                .ok_or_else(|| anyhow::Error::msg(format!("Invalid reference format: {r}")))?;
 
             let hash_str = captures.get(1).unwrap().as_str();
-            let index = captures
-                .get(2)
-                .unwrap()
-                .as_str()
-                .parse::<u64>()
-                .into_diagnostic()?;
+            let index = captures.get(2).unwrap().as_str().parse::<u64>()?;
 
-            let decoded_hash = hex::decode(hash_str).into_diagnostic()?;
+            let decoded_hash = hex::decode(hash_str)?;
 
             Ok((decoded_hash, index))
         })

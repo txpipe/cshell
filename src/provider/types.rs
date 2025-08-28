@@ -246,9 +246,6 @@ impl Provider {
                     }
                     utxorpc::Error::GrpcError(status) => Err(anyhow!(status.message().to_string())
                         .context("Transaction submission failed")),
-                    utxorpc::Error::ParseError(e) => {
-                        Err(anyhow!(e).context("Failed to parse transaction"))
-                    }
                 }
             }
         }
@@ -290,10 +287,7 @@ impl Provider {
         Ok(client.submit(tx, vec![]).await?)
     }
 
-    pub async fn fetch_block(
-        &self,
-        refs: Vec<(Vec<u8>, u64)>,
-    ) -> miette::Result<Vec<AnyChainBlock>> {
+    pub async fn fetch_block(&self, refs: Vec<(Vec<u8>, u64)>) -> Result<Vec<AnyChainBlock>> {
         let mut client: utxorpc::CardanoSyncClient = self.client().await?;
 
         let refs = refs
@@ -310,16 +304,12 @@ impl Provider {
             ..Default::default()
         };
 
-        let response = client
-            .fetch_block(request)
-            .await
-            .into_diagnostic()?
-            .into_inner();
+        let response = client.fetch_block(request).await?.into_inner();
 
         Ok(response.block)
     }
 
-    pub async fn fetch_tx(&self, hash: Vec<u8>) -> miette::Result<Option<AnyChainTx>> {
+    pub async fn fetch_tx(&self, hash: Vec<u8>) -> Result<Option<AnyChainTx>> {
         let mut client: utxorpc::CardanoQueryClient = self.client().await?;
 
         let request = ReadTxRequest {
@@ -327,11 +317,7 @@ impl Provider {
             ..Default::default()
         };
 
-        let response = client
-            .read_tx(request)
-            .await
-            .into_diagnostic()?
-            .into_inner();
+        let response = client.read_tx(request).await?.into_inner();
 
         Ok(response.tx)
     }
