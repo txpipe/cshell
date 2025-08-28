@@ -8,7 +8,7 @@ description = "A Cardano wallet CLI built for developers."
 readme = "README.md"
 repository = "https://github.com/txpipe/cshell"
 license = "Apache-2.0"
-homepage = "https://docs.txpipe.io/cshell"
+jomepage = "https://docs.txpipe.io/cshell"
 
 keywords = ["cardano", "blockchain", "wallet", "cardano"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
@@ -26,9 +26,9 @@ tx3-sdk = "^0"
 # tx3-cardano = { path = "../../tx3-lang/tx3/crates/tx3-cardano" }
 # tx3-sdk = { path = "../../tx3-lang/rust-sdk/sdk" }
 
-# utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
+utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
 # utxorpc = "0.10.0"
-utxorpc = { path = "../../../utxorpc/rust-sdk" }
+# utxorpc = { path = "../../../utxorpc/rust-sdk" }
 
 bech32 = "0.9.1"
 bip39 = { version = "2.0.0", features = ["rand_core"] }

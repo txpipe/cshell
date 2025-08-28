@@ -177,6 +177,7 @@ impl From<utxorpc::Error> for ErrorReport {
             utxorpc::Error::GrpcError(status) => {
                 ErrorReport::new(status.message().to_string(), "grpc".to_string())
             }
+            utxorpc::Error::ParseError(message) => ErrorReport::new(message, "parse".to_string()),
         }
     }
 }

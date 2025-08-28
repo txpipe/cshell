@@ -246,6 +246,9 @@ impl Provider {
                     }
                     utxorpc::Error::GrpcError(status) => Err(anyhow!(status.message().to_string())
                         .context("Transaction submission failed")),
+                    utxorpc::Error::ParseError(e) => {
+                        Err(anyhow!(e).context("Failed to parse transaction"))
+                    }
                 }
             }
         }

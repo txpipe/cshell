@@ -206,8 +206,7 @@ impl EventTask {
 
         self.update_connection(ConnectionState::Connected).await?;
 
-        loop {
-            let event = tip.event().await?;
+        while let Some(event) = tip.event().await? {
             match event {
                 TipEvent::Apply(block) => {
                     let header = block.parsed.clone().unwrap().header.unwrap();
@@ -246,5 +245,7 @@ impl EventTask {
                 }
             }
         }
+
+        Err(anyhow::anyhow!("Tip stream ended unexpectedly"))
     }
 }
