@@ -159,7 +159,7 @@ impl OutputFormatter for query::AnyChainTx {
             match chain {
                 query::any_chain_tx::Chain::Cardano(tx) => {
                     let block_hash = self.block_ref.as_ref().unwrap().hash.clone();
-                    let table = cardano_tx_table(block_hash.into(), &[tx.clone()]);
+                    let table = cardano_tx_table(block_hash.into(), std::slice::from_ref(tx));
                     println!("{table}");
                 }
             }

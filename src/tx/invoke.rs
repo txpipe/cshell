@@ -60,10 +60,10 @@ pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
         args.tx3_args_json.as_deref(),
         args.tx3_args_file.as_deref(),
         ctx,
-        &provider,
+        provider,
     )?;
 
-    let TxEnvelope { tx, hash } = super::common::resolve_tx(&prototx, tx_args, &provider).await?;
+    let TxEnvelope { tx, hash } = super::common::resolve_tx(&prototx, tx_args, provider).await?;
 
     let cbor = hex::decode(tx).unwrap();
 
