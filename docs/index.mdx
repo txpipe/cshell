@@ -1,0 +1,60 @@
+---
+title: Quickstart
+sidebar:
+  order: 0
+---
+
+import { Steps, Tabs, TabItem, Cards, Card } from "@astrojs/starlight/components"
+
+In this guide we're going to learn how to go from zero to a running Cshell instance with the least amount of effort.
+
+<Steps>
+1. ### Installation
+
+    <Tabs>
+      <TabItem label="mac">
+        You can use Homebrew to install the latest version of Cshell in Mac (both x86 / ARM64)
+
+        ```sh
+        brew install txpipe/tap/cshell
+        ```
+      </TabItem>
+      <TabItem label="linux">
+        You can install Cshell on linux system using the following command:
+
+        ```sh
+        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/txpipe/cshell/releases/latest/download/cshell-installer.sh 
+        ```
+      </TabItem>
+      <TabItem label="npm">
+        You can use Npm to install Cshell on your system:
+
+        ```sh
+        npm install @txpipe/cshell
+        ```
+      </TabItem>
+    </Tabs>
+
+2. ### Configuration
+
+    _Cshell_ requires a UtxoRPC and TRP provider, the UtxoRPC is to fetch on-chain data, and the TRP is to resolve and submit transactions. You can get one free instance on [demeter](https://demeter.run/). So when you have the UtxoRPC and TRP url, run the following command that will guide you through a set of questions to define a provider:
+
+    ```sh
+    cshell provider create
+    ```
+    
+    With the provider configured, it is possible to create a wallet or import one. The following example shows how to create one.
+
+    ```sh
+    cshell wallet create
+    ```
+
+3. ### Running
+
+    Explore the commands in the docs or run `cshell --help`. The following command opens a GUI explorer using the default provider.
+
+    ```sh
+    cshell explorer
+    ```
+
+</Steps>

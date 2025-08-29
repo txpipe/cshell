@@ -1,0 +1,28 @@
+---
+title: Create
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `wallet create` command allows you to create a new wallet.
+
+<Aside type="caution">
+The command generates the seeds for the new wallet. Make sure you save the seeds safely.
+</Aside>
+
+## Usage
+
+The arguments in this command are optional, if not provided, it runs in interactive mode.
+
+```bash
+cshell wallet create [OPTIONS]
+```
+
+## Arguments
+
+- `--name`: Name to identify the wallet.
+- `--password`: Spending password used to encrypt the private keys.
+- `--unsafe`: Disable password requirement (not recommended).
+
