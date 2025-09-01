@@ -1,7 +1,7 @@
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc, sync::Arc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pallas::ledger::addresses::Address;
+use pallas::{interop::utxorpc::TxHash, ledger::addresses::Address};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Margin, Rect},
@@ -14,33 +14,53 @@ use ratatui::{
 };
 use regex::Regex;
 use tui_tree_widget::{Tree, TreeItem, TreeState};
-use utxorpc::spec::cardano::{
-    self, big_int,
-    certificate::Certificate,
-    d_rep, metadatum, native_script, plutus_data,
-    script::{self},
-    stake_credential, AuxData, Datum, Metadatum, NativeScript, PlutusData, Redeemer,
-    RedeemerPurpose, Script, Tx, TxInput, TxOutput, TxValidity, VKeyWitness, Withdrawal,
-    WitnessSet,
+use utxorpc::spec::{
+    cardano::{
+        self, big_int,
+        certificate::Certificate,
+        d_rep, metadatum, native_script, plutus_data,
+        script::{self},
+        stake_credential, AuxData, Datum, Metadatum, NativeScript, PlutusData, Redeemer,
+        RedeemerPurpose, Script, Tx, TxInput, TxOutput, TxValidity, VKeyWitness, Withdrawal,
+        WitnessSet,
+    },
+    query,
 };
 
 use crate::{
-    explorer::{App, ChainBlock},
+    explorer::{ChainBlock, ExplorerContext},
     utils::AdaFormat,
 };
 
-#[derive(Default)]
 pub struct TransactionsTabState {
+    context: Arc<ExplorerContext>,
+    blocks: Rc<RefCell<VecDeque<ChainBlock>>>,
     scroll_state: ScrollbarState,
     table_state: TableState,
     search_input: String,
     input_mode: InputMode,
     view_mode: ViewMode,
+    txs: Vec<TxView>,
     tx_selected: Option<TxView>,
     detail_state: TransactionsDetailState,
 }
 impl TransactionsTabState {
-    pub fn handle_key(&mut self, key: &KeyEvent) {
+    pub fn new(context: Arc<ExplorerContext>) -> Self {
+        Self {
+            context,
+            blocks: Rc::default(),
+            scroll_state: Default::default(),
+            table_state: Default::default(),
+            search_input: Default::default(),
+            input_mode: Default::default(),
+            view_mode: Default::default(),
+            txs: Default::default(),
+            tx_selected: Default::default(),
+            detail_state: Default::default(),
+        }
+    }
+
+    pub async fn handle_key(&mut self, key: &KeyEvent) {
         match self.view_mode {
             ViewMode::Normal => match self.input_mode {
                 InputMode::Normal => match (key.code, key.modifiers) {
@@ -73,6 +93,46 @@ impl TransactionsTabState {
                     }
                     KeyCode::Esc => self.input_mode = InputMode::Normal,
                     KeyCode::Enter => {
+                        let mut txs: Vec<TxView> = self
+                            .blocks
+                            .borrow()
+                            .iter()
+                            .flat_map(TxView::from_chain_block)
+                            .collect();
+
+                        if !self.search_input.is_empty() {
+                            let input_regex = Regex::new(&self.search_input).unwrap();
+
+                            txs.retain(|tx| {
+                                input_regex.is_match(&tx.hash)
+                                    || input_regex.is_match(&tx.block_slot.to_string())
+                            });
+
+                            if txs.is_empty() {
+                                if let Ok(v) = hex::decode(&self.search_input) {
+                                    if let Ok(tx_hash) = v.try_into() {
+                                        let tx_hash = TxHash::new(tx_hash);
+                                        if let Ok(Some(any_chain_tx)) =
+                                            self.context.provider.fetch_tx(tx_hash.to_vec()).await
+                                        {
+                                            if let Some(tx_view) =
+                                                TxView::from_any_chain_tx(&any_chain_tx)
+                                            {
+                                                txs.push(tx_view);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if !self.txs.is_empty() {
+                                self.table_state.select_first();
+                                self.input_mode = InputMode::Normal
+                            }
+                        }
+
+                        self.txs = txs;
+
                         self.table_state.select_first();
                         self.input_mode = InputMode::Normal
                     }
@@ -87,12 +147,23 @@ impl TransactionsTabState {
         }
     }
 
-    pub fn update_scroll_state(&mut self, len: usize) {
+    pub fn update_blocks(&mut self, blocks: Rc<RefCell<VecDeque<ChainBlock>>>) {
+        self.blocks = blocks;
+        let len: usize = self.blocks.borrow().iter().map(|b| b.tx_count).sum();
         self.scroll_state = self.scroll_state.content_length(
             len.checked_mul(3)
                 .and_then(|v| v.checked_sub(2))
                 .unwrap_or(0),
-        )
+        );
+
+        if self.search_input.is_empty() {
+            self.txs = self
+                .blocks
+                .borrow()
+                .iter()
+                .flat_map(TxView::from_chain_block)
+                .collect();
+        }
     }
 
     fn next_row(&mut self) {
@@ -124,15 +195,17 @@ impl TransactionsTabState {
 
 #[derive(Clone)]
 pub struct TransactionsTab {
-    blocks: Rc<RefCell<VecDeque<ChainBlock>>>,
+    // blocks: Rc<RefCell<VecDeque<ChainBlock>>>,
+    // context: Arc<ExplorerContext>,
 }
-impl From<&App> for TransactionsTab {
-    fn from(value: &App) -> Self {
-        Self {
-            blocks: Rc::clone(&value.chain.blocks),
-        }
-    }
-}
+// impl From<&App> for TransactionsTab {
+//     fn from(value: &App) -> Self {
+//         Self {
+//             blocks: Rc::clone(&value.chain.blocks),
+//             context: value.context.clone(),
+//         }
+//     }
+// }
 
 #[derive(Clone, Default, PartialEq)]
 enum InputMode {
@@ -188,18 +261,8 @@ impl StatefulWidget for TransactionsTab {
                     .collect::<Row>()
                     .style(Style::default().fg(Color::Green).bold())
                     .height(1);
-                let mut txs: Vec<TxView> =
-                    self.blocks.borrow().iter().flat_map(TxView::new).collect();
-                if !state.search_input.is_empty() {
-                    let input_regex = Regex::new(&state.search_input).unwrap();
 
-                    txs.retain(|tx| {
-                        input_regex.is_match(&tx.hash)
-                            || input_regex.is_match(&tx.block_slot.to_string())
-                    });
-                }
-
-                let rows = txs.iter().enumerate().map(|(i, tx)| {
+                let rows = state.txs.iter().enumerate().map(|(i, tx)| {
                     let color = match i % 2 {
                         0 => Color::Black,
                         _ => Color::Reset,
@@ -246,15 +309,7 @@ impl StatefulWidget for TransactionsTab {
             ViewMode::Detail => {
                 if state.tx_selected.is_none() {
                     let index = state.table_state.selected().unwrap();
-
-                    let txs: Vec<TxView> = self
-                        .blocks
-                        .borrow()
-                        .iter()
-                        .flat_map(TxView::new_with_tx)
-                        .collect();
-
-                    state.tx_selected = Some(txs[index].clone());
+                    state.tx_selected = Some(state.txs[index].clone());
                 }
 
                 TransactionsDetail::new(state.tx_selected.clone().unwrap()).render(
@@ -530,51 +585,68 @@ pub struct TxView {
     block_hash: String,
 }
 impl TxView {
-    pub fn new(chain_block: &ChainBlock) -> Vec<Self> {
-        match &chain_block.body {
-            Some(body) => body
-                .tx
-                .iter()
-                .map(|tx| Self {
-                    hash: hex::encode(&tx.hash),
-                    certs: tx.certificates.len(),
-                    assets: tx.outputs.iter().map(|o| o.assets.len()).sum(),
-                    amount_ada: tx.outputs.iter().map(|o| o.coin).sum(),
-                    datum: tx.outputs.iter().any(|o| match &o.datum {
-                        Some(datum) => !datum.hash.is_empty(),
-                        None => false,
-                    }),
-                    tx: None,
-                    block_slot: chain_block.slot,
-                    block_height: chain_block.number,
-                    block_hash: hex::encode(&chain_block.hash),
-                })
-                .collect(),
-            None => Default::default(),
-        }
-    }
+    pub fn from_chain_block(chain_block: &ChainBlock) -> Vec<Self> {
+        let body = match &chain_block.body {
+            Some(b) => b,
+            None => return Vec::new(),
+        };
 
-    pub fn new_with_tx(chain_block: &ChainBlock) -> Vec<Self> {
-        match &chain_block.body {
-            Some(body) => body
-                .tx
-                .iter()
-                .map(|tx| Self {
-                    hash: hex::encode(&tx.hash),
-                    certs: tx.certificates.len(),
-                    assets: tx.outputs.iter().map(|o| o.assets.len()).sum(),
-                    amount_ada: tx.outputs.iter().map(|o| o.coin).sum(),
-                    datum: tx.outputs.iter().any(|o| match &o.datum {
-                        Some(datum) => !datum.hash.is_empty(),
-                        None => false,
-                    }),
+        body.tx
+            .iter()
+            .map(|tx| {
+                let hash = hex::encode(&tx.hash);
+                let certs = tx.certificates.len();
+                let assets = tx.outputs.iter().map(|o| o.assets.len()).sum();
+                let amount_ada = tx.outputs.iter().map(|o| o.coin).sum();
+                let datum = tx
+                    .outputs
+                    .iter()
+                    .any(|o| o.datum.as_ref().is_some_and(|d| !d.hash.is_empty()));
+
+                TxView {
+                    hash,
+                    certs,
+                    assets,
+                    amount_ada,
+                    datum,
+                    // TODO: improve to not clone the whole tx
                     tx: Some(tx.clone()),
                     block_slot: chain_block.slot,
                     block_height: chain_block.number,
                     block_hash: hex::encode(&chain_block.hash),
+                }
+            })
+            .collect()
+    }
+
+    pub fn from_any_chain_tx(any_chain_tx: &query::AnyChainTx) -> Option<Self> {
+        let chain = any_chain_tx.chain.as_ref()?;
+        let block_ref = any_chain_tx.block_ref.as_ref()?;
+
+        match chain {
+            query::any_chain_tx::Chain::Cardano(tx) => {
+                let hash = hex::encode(&tx.hash);
+                let certs = tx.certificates.len();
+                let assets = tx.outputs.iter().map(|o| o.assets.len()).sum();
+                let amount_ada = tx.outputs.iter().map(|o| o.coin).sum();
+                let datum = tx
+                    .outputs
+                    .iter()
+                    .any(|o| o.datum.as_ref().is_some_and(|d| !d.hash.is_empty()));
+
+                Some(TxView {
+                    hash,
+                    certs,
+                    assets,
+                    amount_ada,
+                    datum,
+                    // TODO: improve to not clone the whole tx
+                    tx: Some(tx.clone()),
+                    block_slot: block_ref.slot,
+                    block_height: block_ref.height,
+                    block_hash: hex::encode(&block_ref.hash),
                 })
-                .collect(),
-            None => Default::default(),
+            }
         }
     }
 }
