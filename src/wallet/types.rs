@@ -460,7 +460,7 @@ impl Bip32PrivateKey {
 
         let mut pbkdf2_result = [0; XPRV_SIZE];
 
-        const ITER: u32 = 2048; // TODO: BIP39 says 2048, CML uses 4096?
+        const ITER: u32 = 4096;
 
         let mut mac = Hmac::new(Sha512::new(), &[]);
         pbkdf2(&mut mac, &entropy, ITER, &mut pbkdf2_result);
