@@ -73,7 +73,13 @@ impl TransactionsTabState {
                     }
                     (KeyCode::Esc, _) => {
                         if !self.search_input.is_empty() {
-                            self.search_input.clear()
+                            self.search_input.clear();
+                            self.txs = self
+                                .blocks
+                                .borrow()
+                                .iter()
+                                .flat_map(TxView::from_chain_block)
+                                .collect();
                         }
                     }
                     (KeyCode::Enter, _) => {
