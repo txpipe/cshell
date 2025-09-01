@@ -1,0 +1,42 @@
+---
+title: Provider 
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cshell uses [**UtxoRPC**](https://utxorpc.org) as its on-chain data provider. It connects to a UtxoRPC server to collect blockchain data and follow the tip. Any service that implements the UtxoRPC interface can act as a data provider for Cshell, for example, [**Dolos**](https://github.com/txpipe/dolos).
+
+UtxoRPC is used only for supplying on-chain data. For transaction resolution and submission, Cshell uses a TRP (Transaction Resolution Protocol) server. TRP, used with [**Tx3**](https://github.com/tx3-lang/tx3), exposes a JSON-RPC interface to resolve and submit transactions. Any application that implements that JSON-RPC interface can serve as Cshell's TRP provider, for example [**Hydra TRP**](https://github.com/tx3-lang/tx3-hydra).
+
+<Aside type="tip">
+Use [**Demeter**](https://demeter.run/) to get a free tier UtxoRPC and TRP instance.
+</Aside>
+
+### Provider storage
+All cshell provider configurations are stored in a single file on your local machine:
+
+- File: **cshell.toml**  
+- Location: In your user home directory (examples: **~/cshell.toml**)
+
+This file contains the definitions for every provider you create.
+
+## Usage
+When providers are available, create and configure a provider in Cshell using the **interactive** command below:
+
+```bash
+cshell provider create 
+```
+
+You can manage providers using Cshell's provider commands. To see which provider commands are available, run the following:
+
+```bash
+cshell provider --help
+```
+
+And the `--help` flag can be used anywhere in Cshell. For example, after choosing the create command, you can check the options available for that command as well:
+
+```bash
+cshell provider create --help
+```
