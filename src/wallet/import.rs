@@ -21,7 +21,7 @@ pub struct Args {
     is_default: Option<bool>,
 }
 
-#[instrument(skip_all, name = "edit")]
+#[instrument(skip_all, name = "import")]
 pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
     let name = match args.name {
         Some(name) => Name::try_from(name)?,
@@ -67,6 +67,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
         name,
         modified: Local::now(),
         public_key: public_key.as_ref().to_vec(),
+        stake_public_key: None,
         is_default: new_is_default,
         is_unsafe: false,
     };
