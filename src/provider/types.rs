@@ -306,8 +306,11 @@ impl Provider {
             r#ref: refs,
             ..Default::default()
         };
-
-        let response = client.fetch_block(request).await?.into_inner();
+        let response = client
+            .fetch_block(request)
+            .await
+            .map_err(|err| anyhow::Error::msg(format!("Fetch block. {}", err.code())))?
+            .into_inner();
 
         Ok(response.block)
     }
@@ -320,7 +323,11 @@ impl Provider {
             ..Default::default()
         };
 
-        let response = client.read_tx(request).await?.into_inner();
+        let response = client
+            .read_tx(request)
+            .await
+            .map_err(|err| anyhow::Error::msg(format!("Fetch transaction. {}", err.code())))?
+            .into_inner();
 
         Ok(response.tx)
     }
