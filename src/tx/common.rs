@@ -191,7 +191,7 @@ pub fn define_args(
     let mut remaining_params = params.clone();
 
     let mut loaded_args =
-        super::common::load_args(inline_args, file_args.as_deref(), &remaining_params)?;
+        super::common::load_args(inline_args, file_args, &remaining_params)?;
 
     // remove from the remaining params the args we already managed to load from the
     // file or json

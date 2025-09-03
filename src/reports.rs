@@ -72,13 +72,6 @@ impl ErrorReport {
 
         let _ = writeln!(stderr);
     }
-
-    /// Print the error report to stdout with JSON formatting
-    pub fn print_json(&self) {
-        let json = serde_json::to_string_pretty(self)
-            .unwrap_or_else(|_| format!("{{\"error\": \"Failed to serialize error report\"}}"));
-        println!("{}", json);
-    }
 }
 
 impl std::fmt::Display for ErrorReport {

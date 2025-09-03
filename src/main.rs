@@ -8,6 +8,7 @@ mod explorer;
 mod output;
 mod provider;
 mod reports;
+mod search;
 mod store;
 mod tx;
 mod types;
@@ -65,6 +66,9 @@ enum Commands {
     /// Explore the blockchain
     #[command()]
     Explorer(explorer::Args),
+
+    /// Search on chain data
+    Search(search::Args),
 }
 
 #[derive(Clone, ValueEnum)]
@@ -131,6 +135,7 @@ async fn run_command() -> anyhow::Result<()> {
         Commands::Tx(args) => tx::run(args, &ctx).await,
         Commands::Wallet(args) => wallet::run(args, &mut ctx).await,
         Commands::Explorer(args) => explorer::run(args, &ctx).await,
+        Commands::Search(args) => search::run(args, &mut ctx).await,
     };
 
     ctx.store.write()?;

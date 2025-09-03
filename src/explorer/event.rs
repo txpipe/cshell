@@ -240,7 +240,7 @@ impl EventTask {
                     self.check_balances().await?;
                 }
                 TipEvent::Reset(point) => {
-                    self.send(Event::App(AppEvent::Reset(point.index)))?;
+                    self.send(Event::App(AppEvent::Reset(point.slot)))?;
                     self.check_balances().await?;
                 }
             }

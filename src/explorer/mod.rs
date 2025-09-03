@@ -102,7 +102,7 @@ impl App {
             events: EventHandler::new(context.clone()),
             accounts_tab_state: AccountsTabState::default(),
             blocks_tab_state: BlocksTabState::default(),
-            transactions_tab_state: TransactionsTabState::default(),
+            transactions_tab_state: TransactionsTabState::new(Arc::clone(&context)),
         }
     }
 
@@ -173,7 +173,7 @@ impl App {
                     _ => self.accounts_tab_state.handle_key(&key),
                 },
                 SelectedTab::Blocks(_) => self.blocks_tab_state.handle_key(&key),
-                SelectedTab::Transactions(_) => self.transactions_tab_state.handle_key(&key),
+                SelectedTab::Transactions(_) => self.transactions_tab_state.handle_key(&key).await,
             }
         }
     }
@@ -197,13 +197,10 @@ impl App {
             .update_scroll_state(self.chain.blocks.borrow().len());
 
         self.transactions_tab_state
-            .update_scroll_state(self.chain.blocks.borrow().iter().map(|b| b.tx_count).sum());
+            .update_blocks(Rc::clone(&self.chain.blocks));
 
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Blocks(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
-            SelectedTab::Transactions(_) => {
-                SelectedTab::Transactions(TransactionsTab::from(&*self))
-            }
             x => x.clone(),
         }
     }
@@ -223,7 +220,7 @@ impl App {
             .update_scroll_state(self.chain.blocks.borrow().len());
 
         self.transactions_tab_state
-            .update_scroll_state(self.chain.blocks.borrow().iter().map(|b| b.tx_count).sum());
+            .update_blocks(Rc::clone(&self.chain.blocks));
 
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Blocks(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
@@ -233,7 +230,7 @@ impl App {
 
     fn select_previous_tab(&mut self) {
         self.selected_tab = match &self.selected_tab {
-            SelectedTab::Accounts(_) => SelectedTab::Transactions(TransactionsTab::from(&*self)),
+            SelectedTab::Accounts(_) => SelectedTab::Transactions(TransactionsTab {}),
             SelectedTab::Blocks(_) => SelectedTab::Accounts(AccountsTab::new(self.context.clone())),
             SelectedTab::Transactions(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
         }
@@ -242,7 +239,7 @@ impl App {
     fn select_next_tab(&mut self) {
         self.selected_tab = match &self.selected_tab {
             SelectedTab::Accounts(_) => SelectedTab::Blocks(BlocksTab::from(&*self)),
-            SelectedTab::Blocks(_) => SelectedTab::Transactions(TransactionsTab::from(&*self)),
+            SelectedTab::Blocks(_) => SelectedTab::Transactions(TransactionsTab {}),
             SelectedTab::Transactions(_) => {
                 SelectedTab::Accounts(AccountsTab::new(self.context.clone()))
             }

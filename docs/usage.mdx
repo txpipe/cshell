@@ -1,0 +1,52 @@
+---
+title: Usage
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+With Cshell fully configured ([provider](/cshell/provider) and [wallet](/cshell/wallet)), it's time to start using it to manage transactions or fetch on-chain data.
+
+You can execute any transaction in Cshell using [**tx3**](https://docs.txpipe.io/tx3). Cshell will call the TRP to resolve and submit the transaction.
+
+<Aside type="tip">
+Use `--help` to view the CLI options.
+</Aside>
+
+<Aside type="note">
+The `--help` flag can be used anywhere in Cshell
+</Aside>
+
+## Commands
+The commands below are used to handle transactions and fetch on-chain data.
+
+### Transactions
+You can manage transactions by using Cshell's `tx` or `transactions` commands. To see which tx commands are available, run the following:
+
+```bash
+cshell tx --help
+```
+
+Use the `--help` flag with any command to view its available options.
+
+```bash
+cshell tx invoke --help 
+```
+
+### Search
+You can search by block or transactions using the commands search. To see which search commands are available, run the following
+
+<Aside type="note">
+Use the `--output-format` flag to change the output format, it supports `json`, `table`. Default is `table`.
+</Aside>
+
+```bash
+cshell search --help
+```
+
+Use the `--help` flag with any command to view its available options.
+
+```bash
+cshell search block --help
+```

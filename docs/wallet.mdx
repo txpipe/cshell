@@ -1,0 +1,63 @@
+---
+title: Wallet
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+How cshell handles wallet creation, storage, and security. Understanding these concepts is crucial for managing your funds safely.
+
+### Wallet storage
+All cshell wallet configurations are stored in a single file on your local machine:
+
+- File: **cshell.toml**  
+- Location: In your user home directory (examples: **~/cshell.toml**)
+
+This file contains the definitions for every wallet you create, import, or restore.
+
+### Security and encryption
+Cshell protects private keys using a password-based encryption model.
+
+- When you create a wallet you set a spending password.
+- The password is run through Argon2 to derive an encryption key, and that key is used with the `ChaCha20-Poly1305` cipher to encrypt the wallet’s private key.  
+- **Your password is never stored on disk**, it exists only in memory when needed to sign a transaction.
+
+<Aside type="caution">
+Because the password is never stored, it cannot be recovered. If you lose it you must restore the wallet from its mnemonic seed phrase
+</Aside>
+
+### Unsafe wallets (plain-text keys)
+Cshell supports an `--unsafe` option at creation time (wallet create --unsafe).
+
+- What it does: disables password protection and stores the private key in plain text inside cshell.toml.  
+- Intended use: temporary, disposable wallets for development or testing only.
+
+<Aside type="caution">
+Never store real funds in an unsafe wallet. Anyone with access to cshell.toml can control those funds
+</Aside>
+
+### Importing vs restoring wallets
+Cshell supports both wallet import and wallet restore, these are different operations with different functional implications.
+
+- Import: creating read-only (watch-only) wallets.
+- Restore: recovering fully functional wallets using the mnemonic seed phrase.
+
+## Usage
+Create a wallet using the **interactive** command below:
+
+```bash
+cshell wallet create 
+```
+
+You can manage wallets using Cshell's wallet commands. To see which wallet commands are available, run the following:
+
+```bash
+cshell wallet --help
+```
+
+And the `--help` flag can be used anywhere in Cshell. For example, after choosing the create command, you can check the options available for that command as well:
+
+```bash
+cshell wallet create --help
+```
