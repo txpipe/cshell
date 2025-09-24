@@ -1,0 +1,15 @@
+party Wallet;
+
+tx utxo_consolidate(
+  utxo_list: List<UtxoRef>, // Not supported currently
+) {
+  input * utxos {
+    from: Wallet,
+    ref: utxo_list,
+  }
+
+  output consolidated {
+    to: Wallet,
+    amount: utxos - fees,
+  }
+}

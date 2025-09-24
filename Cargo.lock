@@ -607,7 +607,7 @@ checksum = "382ce8820a5bb815055d3553a610e8cb542b2d767bbacea99038afda96cd760d"
 
 [[package]]
 name = "cshell"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -3589,9 +3589,9 @@ dependencies = [
 
 [[package]]
 name = "tx3-cardano"
-version = "0.11.4"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca5f14e3e1b68b1bff81d58c891604a3087f34be70c2a2ad58a8605b6f15ed82"
+checksum = "9532e9d3e4f40b02b88023c082bd1e27c3e3467bb6a749f7b261e82712b0941c"
 dependencies = [
  "hex",
  "pallas",
@@ -3604,9 +3604,9 @@ dependencies = [
 
 [[package]]
 name = "tx3-lang"
-version = "0.11.4"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7607218726810f53079b50a63ff4b5e25a8ccf53a82a80d7b6cc1815feec7a65"
+checksum = "f9ffdc30232bfe0bfeced3d48768b8f00ed9f3015d9e78323ecda4cf45cbbd56"
 dependencies = [
  "bincode",
  "hex",
