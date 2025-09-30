@@ -45,31 +45,7 @@ Transfers ADA from one party to another with change calculation.
 cshell -s ~/.tx3/tmp/devnet_756435378c8d3771/cshell.toml tx invoke --tx3-file ./transfer.tx3
 ```
 
-### 2. `utxo_consolidate.tx3` - UTXO Consolidation
-
-Combines multiple UTXOs into a single output to optimize wallet organization.
-
-**Parties**: `Wallet`  
-**Parameters**: `utxo_list` (list of UTXO references to consolidate)
-
-```bash
-cshell -s ~/.tx3/tmp/devnet_756435378c8d3771/cshell.toml tx invoke --tx3-file ./utxo_consolidate.tx3
-```
-
-### 3. `utxo_split.tx3` - UTXO Splitting
-
-Splits a single UTXO into multiple outputs of specified amounts.
-
-**Parties**: `Wallet`  
-**Parameters**: 
-- `input_utxo` (UTXO reference to split)
-- `quantity` (amount for the new output)
-
-```bash
-cshell -s ~/.tx3/tmp/devnet_756435378c8d3771/cshell.toml tx invoke --tx3-file ./utxo_split.tx3
-```
-
-### 4. `mint_token.tx3` - Token Minting
+### 2. `mint_token.tx3` - Token Minting
 
 Creates new native tokens on Cardano.
 
@@ -81,4 +57,16 @@ Creates new native tokens on Cardano.
 
 ```bash
 cshell -s ~/.tx3/tmp/devnet_756435378c8d3771/cshell.toml tx invoke --tx3-file ./mint_token.tx3
+```
+
+### 3. `mint_with_script.tx3` - Plutus Script Token Minting
+
+Demonstrates token minting using a Plutus v3 script with a PIN-based vending machine mechanism. This example shows how to interact with smart contracts for token minting.
+
+**Parties**: `Customer`  
+**Parameters**: 
+- `pin` (PIN code in bytes)
+
+```bash
+cshell -s ~/.tx3/tmp/devnet_756435378c8d3771/cshell.toml tx invoke --tx3-file ./mint_with_script.tx3
 ```

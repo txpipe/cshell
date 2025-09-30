@@ -10,18 +10,18 @@ tx mint_token (
     token: AnyAsset(token_policy, token_name, quantity),
   }
 
-  mint {
-    amount: token,
-    redeemer: (),
-  }
-
   input source {
     from: Minter,
     min_amount: fees,
   }
 
+  mint {
+    amount: token,
+    redeemer: (),
+  }
+
   output destination {
     to: Minter,
-    amount: token - fees,
+    amount: source + token - fees,
   }
 }
