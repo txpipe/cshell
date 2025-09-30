@@ -3,7 +3,6 @@
 use std::{fs, path::PathBuf, str::FromStr};
 
 use anyhow::{Result, Context};
-use hex::ToHex;
 use pallas::ledger::addresses::Address;
 use serde_json::json;
 use inquire::{Text, Confirm};
@@ -49,7 +48,7 @@ impl TransactionBuilder {
 
     pub fn from_ast(ast_path_buf: &PathBuf) -> Result<Self> {
         let ast = if ast_path_buf.exists() {
-            let ast_content = fs::read_to_string(&ast_path_buf)
+            let ast_content = fs::read_to_string(ast_path_buf)
                 .context("Failed to read existing AST file")?;
 
             serde_json::from_str(&ast_content)
@@ -168,11 +167,7 @@ impl TransactionBuilder {
             };
 
             let mut output_block = tx3_lang::ast::OutputBlock {
-                name: if let Some(name) = &output_name {
-                    Some(tx3_lang::ast::Identifier::new(name.clone()))
-                } else {
-                    None
-                },
+                name: output_name.as_ref().map(|name| tx3_lang::ast::Identifier::new(name.clone())),
                 span: tx3_lang::ast::Span::default(),
                 fields: Vec::new(),
             };
@@ -227,33 +222,24 @@ impl TransactionBuilder {
             content.push_str(&format!("\tinput {} {{\n", input.name));
             input.fields.iter().for_each(|field| {
                 match field {
-                    tx3_lang::ast::InputBlockField::From(expr) => {
-                        match expr {
-                            tx3_lang::ast::DataExpr::String(literal) => {
-                                content.push_str(&format!("\t\tfrom: \"{}\",\n", literal.value));
-                            }
-                            _ => {}
-                        }
+                    tx3_lang::ast::InputBlockField::From(
+                        tx3_lang::ast::DataExpr::String(literal)
+                    ) => {
+                        content.push_str(&format!("\t\tfrom: \"{}\",\n", literal.value));
                     },
-                    tx3_lang::ast::InputBlockField::Ref(expr) => {
-                        match expr {
-                            tx3_lang::ast::DataExpr::UtxoRef(utxoref) => {
-                                content.push_str(&format!("\t\tref: 0x{}#{},\n", hex::encode(&utxoref.txid), utxoref.index));
-                            }
-                            _ => {}
-                        }
+                    tx3_lang::ast::InputBlockField::Ref(
+                        tx3_lang::ast::DataExpr::UtxoRef(utxoref)
+                    ) => {
+                        content.push_str(&format!("\t\tref: 0x{}#{},\n", hex::encode(&utxoref.txid), utxoref.index));
                     },
-                    tx3_lang::ast::InputBlockField::MinAmount(expr) => {
-                        match expr {
-                            tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor) => {
-                                let amount = match *constructor.amount {
-                                    tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
-                                    _ => "unknown".to_string(),
-                                };
-                                content.push_str(&format!("\t\tmin_amount: {}({}),\n", constructor.r#type.value, amount));
-                            }
-                            _ => {}
-                        }
+                    tx3_lang::ast::InputBlockField::MinAmount(
+                        tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor)
+                    ) => {
+                        let amount = match *constructor.amount {
+                            tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
+                            _ => "unknown".to_string(),
+                        };
+                        content.push_str(&format!("\t\tmin_amount: {}({}),\n", constructor.r#type.value, amount));
                     },
                     _ => {}
                 }
@@ -272,23 +258,17 @@ impl TransactionBuilder {
             output.fields.iter().for_each(|field| {
                 match field {
                     tx3_lang::ast::OutputBlockField::To(expr) => {
-                        match expr.as_ref() {
-                            tx3_lang::ast::DataExpr::String(literal) => {
-                                content.push_str(&format!("\t\tto: \"{}\",\n", literal.value));
-                            }
-                            _ => {}
+                        if let tx3_lang::ast::DataExpr::String(literal) = expr.as_ref() {
+                            content.push_str(&format!("\t\tto: \"{}\",\n", literal.value));
                         }
                     },
                     tx3_lang::ast::OutputBlockField::Amount(expr) => {
-                        match expr.as_ref() {
-                            tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor) => {
-                                let amount = match *constructor.amount {
-                                    tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
-                                    _ => "unknown".to_string(),
-                                };
-                                content.push_str(&format!("\t\tamount: {}({}),\n", constructor.r#type.value, amount));
-                            }
-                            _ => {}
+                        if let tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor) = expr.as_ref() {
+                            let amount = match *constructor.amount {
+                                tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
+                                _ => "unknown".to_string(),
+                            };
+                            content.push_str(&format!("\t\tamount: {}({}),\n", constructor.r#type.value, amount));
                         }
                     },
                     _ => {}
