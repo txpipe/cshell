@@ -43,8 +43,12 @@ pub async fn run(args: Args, _ctx: &crate::Context) -> Result<()> {
     fs::write(&args.tx3_file, tx3_content)
         .context("Failed to write tx3 file")?;
 
-    fs::write(ast_path_buf, serde_json::to_string_pretty(&ast).unwrap())
-        .context("Failed to write tx3 AST file")?;
+    // Serialize and write AST
+    let ast_json = serde_json::to_string_pretty(&ast)
+        .context("Failed to serialize tx3 AST")?;
+
+    fs::write(&ast_path_buf, ast_json)
+        .with_context(|| format!("Failed to write tx3 AST file: {}", ast_path_buf.display()))?;
 
     println!("\n✅ Transaction created successfully!");
     println!("📄 File saved to: {}", args.tx3_file.display());

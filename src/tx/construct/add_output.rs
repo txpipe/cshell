@@ -19,11 +19,12 @@ pub async fn run(args: Args, _ctx: &crate::Context) -> Result<()> {
 
     tx_builder.collect_outputs(true)?;
 
-    let ast = tx_builder.ast.clone();
+    // Serialize and write AST
+    let ast_json = serde_json::to_string_pretty(&tx_builder.ast)
+        .context("Failed to serialize tx3 AST")?;
 
-    // Write to AST file
-    fs::write(&ast_path_buf, serde_json::to_string_pretty(&ast).unwrap())
-        .context("Failed to write tx3 AST file")?;
+    fs::write(&ast_path_buf, ast_json)
+        .with_context(|| format!("Failed to write tx3 AST file: {}", ast_path_buf.display()))?;
 
     println!("\n✅ Output added successfully!");
     println!("📄 File saved to: {}", ast_path_buf.display());

@@ -13,7 +13,7 @@ pub struct TransactionBuilder {
 }
 
 impl TransactionBuilder {
-    pub fn new(name: String, mut ast: tx3_lang::ast::Program) -> Self {
+    pub fn new(name: String, mut ast: tx3_lang::ast::Program) -> Result<Self> {
         let mut def_index = ast.txs.iter().position(|tx| tx.name.value == name);
 
         if def_index.is_none() {
@@ -35,15 +35,19 @@ impl TransactionBuilder {
                 "span": tx3_lang::ast::Span::default(),
                 "collateral": [],
             });
-            ast.txs.push(serde_json::from_value(value).unwrap());
+            let tx_def: tx3_lang::ast::TxDef =
+                serde_json::from_value(value)
+                    .context("Failed to materialize TxDef from JSON template")?;
+
+            ast.txs.push(tx_def);
 
             def_index = Some(ast.txs.len() - 1);
         }
         
-        Self {
+        Ok(Self {
             ast: ast.clone(),
             def_index: def_index.unwrap(),
-        }
+        })
     }
 
     pub fn from_ast(ast_path_buf: &PathBuf) -> Result<Self> {
@@ -57,7 +61,7 @@ impl TransactionBuilder {
             tx3_lang::ast::Program::default()
         };
 
-        Ok(TransactionBuilder::new("new_transaction".to_string(), ast))
+        TransactionBuilder::new("new_transaction".to_string(), ast)
     }
 
     pub fn collect_inputs(&mut self, skip_question: bool) -> Result<()> {
@@ -101,14 +105,21 @@ impl TransactionBuilder {
                 continue;
             }
 
-
             // input_block.fields.push(tx3_lang::ast::InputBlockField::From(
             //     tx3_lang::ast::DataExpr::String(tx3_lang::ast::StringLiteral::new(address.to_bech32().unwrap())),
             // ));
+
+            let txid = hex::decode(parts[0])
+                .context("Invalid txid hex in UTxO reference")?;
+
+            let index = parts[1]
+                .parse::<u64>()
+                .context("Invalid UTxO index")?;
+
             input_block.fields.push(tx3_lang::ast::InputBlockField::Ref(
                 tx3_lang::ast::DataExpr::UtxoRef(tx3_lang::ast::UtxoRef {
-                    txid: hex::decode(parts[0]).unwrap(),
-                    index: parts[1].parse::<u64>().unwrap(),
+                    txid,
+                    index,
                     span: tx3_lang::ast::Span::default(),
                 }),
             ));
@@ -117,9 +128,13 @@ impl TransactionBuilder {
                 .with_default("1000000")
                 .prompt()?;
 
+            let min_amount_value = min_amount
+                .parse::<i64>()
+                .context("Invalid minimum amount value")?;
+
             input_block.fields.push(tx3_lang::ast::InputBlockField::MinAmount(
                 tx3_lang::ast::DataExpr::StaticAssetConstructor(tx3_lang::ast::StaticAssetConstructor {
-                    amount: Box::new(tx3_lang::ast::DataExpr::Number(min_amount.parse::<i64>().unwrap())),
+                    amount: Box::new(tx3_lang::ast::DataExpr::Number(min_amount_value)),
                     span: tx3_lang::ast::Span::default(),
                     r#type: tx3_lang::ast::Identifier::new("Ada".to_string()),
                 })
@@ -180,17 +195,27 @@ impl TransactionBuilder {
             let address = Address::from_str(&to_address)
                 .context("Invalid address")?;
 
+            let bech32 = address
+                .to_bech32()
+                .context("Failed to encode bech32 address")?;
+
             output_block.fields.push(tx3_lang::ast::OutputBlockField::To(
-                Box::new(tx3_lang::ast::DataExpr::String(tx3_lang::ast::StringLiteral::new(address.to_bech32().unwrap()))),
+                Box::new(tx3_lang::ast::DataExpr::String(
+                    tx3_lang::ast::StringLiteral::new(bech32)
+                )),
             ));
 
             let amount = Text::new("Amount:")
                 .with_default("1000000")
                 .prompt()?;
 
+            let amount_value = amount
+                .parse::<i64>()
+                .context("Invalid Ada amount")?;
+
             output_block.fields.push(tx3_lang::ast::OutputBlockField::Amount(
                 Box::new(tx3_lang::ast::DataExpr::StaticAssetConstructor(tx3_lang::ast::StaticAssetConstructor {
-                    amount: Box::new(tx3_lang::ast::DataExpr::Number(amount.parse::<i64>().unwrap())),
+                    amount: Box::new(tx3_lang::ast::DataExpr::Number(amount_value)),
                     span: tx3_lang::ast::Span::default(),
                     r#type: tx3_lang::ast::Identifier::new("Ada".to_string()),
                 }))
