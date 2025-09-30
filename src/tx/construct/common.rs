@@ -1,87 +1,20 @@
+
+
 use std::{fs, path::PathBuf, str::FromStr};
 
 use anyhow::{Result, Context};
-use clap::Parser;
+use hex::ToHex;
 use pallas::ledger::addresses::Address;
 use serde_json::json;
-use tracing::instrument;
-use tx3_lang::Protocol;
 use inquire::{Text, Confirm};
 
-#[derive(Parser, Clone)]
-pub struct Args {
-    /// Path for tx3 file to create the transaction
-    #[arg(long)]
-    tx3_file: PathBuf,
-}
-
-struct TransactionBuilder {
-    ast: tx3_lang::ast::Program,
-    def_index: usize,
-}
-
-#[instrument("construct", skip_all)]
-pub async fn run(args: Args, _ctx: &crate::Context) -> Result<()> {
-    tracing::debug!("Creating transaction from {}", args.tx3_file.display());
-    let ast_path_buf = args.tx3_file.with_extension("ast");
-
-    // let ast = if args.tx3_file.exists() {
-    //     let protocol = Protocol::from_file(&args.tx3_file)
-    //         .load()
-    //         .context("Failed to load existing tx3 file")?;
-    //     protocol.ast().clone()
-    // } else if ast_path_buf.exists() {
-    //     let ast_content = fs::read_to_string(&ast_path_buf)
-    //         .context("Failed to read existing AST file")?;
-
-    //     dbg!("Loaded existing AST from {}", ast_path_buf.display());
-
-    //     serde_json::from_str(&ast_content)
-    //         .context("Failed to parse existing AST file")?
-    // } else {
-    //     tx3_lang::ast::Program::default()
-    // };
-
-    let ast = if ast_path_buf.exists() {
-        let ast_content = fs::read_to_string(&ast_path_buf)
-            .context("Failed to read existing AST file")?;
-
-        dbg!("Loaded existing AST from {}", ast_path_buf.display());
-
-        serde_json::from_str(&ast_content)
-            .context("Failed to parse existing AST file")?
-    } else {
-        tx3_lang::ast::Program::default()
-    };
-
-    dbg!("Initial AST: {:#?}", &ast);
-
-    let mut tx_builder = TransactionBuilder::new("new_transaction".to_string(), ast);
-
-    tx_builder.collect_inputs()?;
-
-    tx_builder.collect_outputs()?;
-
-    let ast = tx_builder.ast.clone();
-
-    // Generate the tx3 content
-    let tx3_content = tx_builder.generate_tx3_content();
-
-    // Write to file
-    fs::write(&args.tx3_file, tx3_content)
-        .context("Failed to write tx3 file")?;
-
-    fs::write(ast_path_buf, serde_json::to_string_pretty(&ast).unwrap())
-        .context("Failed to write tx3 AST file")?;
-
-    println!("\n✅ Transaction created successfully!");
-    println!("📄 File saved to: {}", args.tx3_file.display());
-
-    Ok(())
+pub struct TransactionBuilder {
+    pub ast: tx3_lang::ast::Program,
+    pub def_index: usize,
 }
 
 impl TransactionBuilder {
-    fn new(name: String, mut ast: tx3_lang::ast::Program) -> Self {
+    pub fn new(name: String, mut ast: tx3_lang::ast::Program) -> Self {
         let mut def_index = ast.txs.iter().position(|tx| tx.name.value == name);
 
         if def_index.is_none() {
@@ -114,17 +47,34 @@ impl TransactionBuilder {
         }
     }
 
-    fn collect_inputs(&mut self) -> Result<()> {
+    pub fn from_ast(ast_path_buf: &PathBuf) -> Result<Self> {
+        let ast = if ast_path_buf.exists() {
+            let ast_content = fs::read_to_string(&ast_path_buf)
+                .context("Failed to read existing AST file")?;
+
+            serde_json::from_str(&ast_content)
+                .context("Failed to parse existing AST file")?
+        } else {
+            tx3_lang::ast::Program::default()
+        };
+
+        Ok(TransactionBuilder::new("new_transaction".to_string(), ast))
+    }
+
+    pub fn collect_inputs(&mut self, skip_question: bool) -> Result<()> {
         println!("\n📥 Transaction Inputs");
         println!("====================");
 
-        let add_inputs = Confirm::new("Do you want to add inputs to your transaction?")
-            .with_default(true)
-            .prompt()?;
-
-        if !add_inputs {
-            return Ok(());
+        if !skip_question {
+            let add_inputs = Confirm::new("Do you want to add inputs to your transaction?")
+                .with_default(true)
+                .prompt()?;
+    
+            if !add_inputs {
+                return Ok(());
+            }
         }
+
 
         loop {
             let input_name = Text::new("Input name:")
@@ -142,16 +92,26 @@ impl TransactionBuilder {
                 fields: Vec::new(),
             };
 
-            let from_address = Text::new("From address:")
-                .with_help_message("Enter the address this input comes from")
+            let utxo_ref = Text::new("Utxo Ref:")
+                .with_help_message("Enter the Utxo for this input (txid#index)")
                 .prompt()?;
 
-            // Validate address
-            let address = Address::from_str(&from_address)
-                .context("Invalid address")?;
+            let parts: Vec<&str> = utxo_ref.split('#').collect();
+            if parts.len() != 2 {
+                println!("Invalid Utxo Ref format. Expected format: txid#index");
+                continue;
+            }
 
-            input_block.fields.push(tx3_lang::ast::InputBlockField::From(
-                tx3_lang::ast::DataExpr::String(tx3_lang::ast::StringLiteral::new(address.to_bech32().unwrap())),
+
+            // input_block.fields.push(tx3_lang::ast::InputBlockField::From(
+            //     tx3_lang::ast::DataExpr::String(tx3_lang::ast::StringLiteral::new(address.to_bech32().unwrap())),
+            // ));
+            input_block.fields.push(tx3_lang::ast::InputBlockField::Ref(
+                tx3_lang::ast::DataExpr::UtxoRef(tx3_lang::ast::UtxoRef {
+                    txid: hex::decode(parts[0]).unwrap(),
+                    index: parts[1].parse::<u64>().unwrap(),
+                    span: tx3_lang::ast::Span::default(),
+                }),
             ));
 
             let min_amount = Text::new("Minimum amount value:")
@@ -180,16 +140,18 @@ impl TransactionBuilder {
         Ok(())
     }
 
-    fn collect_outputs(&mut self) -> Result<()> {
+    pub fn collect_outputs(&mut self, skip_question: bool) -> Result<()> {
         println!("\n📤 Transaction Outputs");
         println!("=====================");
 
-        let add_outputs = Confirm::new("Do you want to add outputs to your transaction?")
-            .with_default(true)
-            .prompt()?;
-
-        if !add_outputs {
-            return Ok(());
+        if !skip_question {
+            let add_outputs = Confirm::new("Do you want to add outputs to your transaction?")
+                .with_default(true)
+                .prompt()?;
+    
+            if !add_outputs {
+                return Ok(());
+            }
         }
 
         loop {
@@ -254,7 +216,7 @@ impl TransactionBuilder {
         Ok(())
     }
 
-    fn generate_tx3_content(self) -> String {
+    pub fn generate_tx3_content(self) -> String {
         let mut content = String::new();
 
         // Add transaction
@@ -269,6 +231,14 @@ impl TransactionBuilder {
                         match expr {
                             tx3_lang::ast::DataExpr::String(literal) => {
                                 content.push_str(&format!("\t\tfrom: \"{}\",\n", literal.value));
+                            }
+                            _ => {}
+                        }
+                    },
+                    tx3_lang::ast::InputBlockField::Ref(expr) => {
+                        match expr {
+                            tx3_lang::ast::DataExpr::UtxoRef(utxoref) => {
+                                content.push_str(&format!("\t\tref: 0x{}#{},\n", hex::encode(&utxoref.txid), utxoref.index));
                             }
                             _ => {}
                         }
