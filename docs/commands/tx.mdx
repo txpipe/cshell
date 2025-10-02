@@ -1,0 +1,374 @@
+---
+title: Transaction Commands
+sidebar:
+  order: 0
+  label: tx
+---
+
+import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `tx` command (or `transactions`) provides a complete workflow for managing Cardano transactions in Cshell. You can execute transactions using [**tx3**](https://docs.txpipe.io/tx3) files, or work with individual steps of the transaction lifecycle.
+
+<Aside type="tip">
+Cshell uses TRP (Transaction Resolution Protocol) to resolve and submit transactions.
+</Aside>
+
+## Transaction Workflow
+
+Understanding the transaction lifecycle:
+
+1. **Write**: Create a tx3 file describing your transaction
+2. **Resolve**: Convert tx3 to CBOR format (handled by TRP)
+3. **Sign**: Add cryptographic signatures using your wallet
+4. **Submit**: Send the transaction to the blockchain
+
+The `tx invoke` command handles all these steps automatically, while individual commands let you control each step separately for advanced use cases.
+
+## Available Commands
+
+- **`tx invoke`**: Resolve, sign, and submit a tx3 transaction in one step
+- **`tx construct`**: Build transactions interactively or programmatically
+- **`tx resolve`**: Resolve a tx3 transaction to CBOR
+- **`tx sign`**: Sign a CBOR transaction
+- **`tx submit`**: Submit a CBOR transaction to the blockchain
+
+---
+
+## tx invoke
+
+The `tx invoke` command executes a complete transaction workflow: resolving a tx3 file, signing it with your wallet, and submitting it to the blockchain.
+
+### Usage
+
+```bash
+cshell tx invoke --tx3-file <path-to-tx3-file>
+```
+
+### Options
+
+Run `cshell tx invoke --help` to see all available options.
+
+#### Using with Different Provider
+
+You can specify a different provider using flags:
+
+```bash
+cshell tx invoke --tx3-file ./transfer.tx3 --provider testnet
+```
+
+### How it Works
+
+When you run `tx invoke`, Cshell:
+
+1. **Reads** your tx3 file
+2. **Resolves** the transaction via your configured TRP server
+3. **Signs** the transaction using the appropriate wallet(s)
+4. **Submits** the signed transaction to the blockchain
+5. **Returns** the transaction hash
+
+<Aside type="tip">
+Check out the [examples directory](https://github.com/txpipe/cshell/tree/main/examples) for more tx3 transaction samples.
+</Aside>
+
+---
+
+## tx construct
+
+The `tx construct` command provides tools for building transactions programmatically or interactively, offering more control than tx3 files for advanced use cases.
+
+### Available Subcommands
+
+The construct command includes several subcommands:
+
+```bash
+cshell tx construct --help
+```
+
+#### Wizard
+
+Generate a tx3 transaction using an interactive wizard:
+
+```bash
+cshell tx construct wizard
+```
+
+The wizard guides you through the transaction creation process step by step, asking for inputs, outputs, and other transaction details.
+
+#### Add Input
+
+Add a UTxO input to a transaction:
+
+```bash
+cshell tx construct add-input --tx3-file <path-to-tx3-file>
+```
+
+**Options:**
+- `--tx3-file`: Path to the final tx3 file used to identify current transaction (tx3 file will be created on build command)
+- Additional options available with `--help`
+
+#### Add Output
+
+Add an output to a transaction:
+```bash
+cshell tx construct add-output --tx3-file <path-to-tx3-file>
+```
+
+**Options:**
+- `--tx3-file`: Path to the final tx3 file used to identify current transaction (tx3 file will be created on build command)
+- Additional options for assets and datum with `--help`
+
+#### Build
+
+Generate the tx3 file from accumulated inputs and outputs:
+
+```bash
+cshell tx construct build --tx3-file <path-to-tx3-file>
+```
+
+This will take all the inputs/outputs you've added by add-input / add-output commands and create a complete tx3 file.
+
+### Workflow Example
+
+Here's a typical workflow for constructing a transaction manually:
+
+```bash
+# Start with the wizard to set up basic structure
+cshell tx construct wizard
+
+# Or build step by step:
+
+# 1. Add input UTxO
+cshell tx construct add-input --tx3-file my-transaction.tx3
+
+# 2. Add output
+cshell tx construct add-output --tx3-file my-transaction.tx3
+
+# 3. Add change output
+cshell tx construct add-output --tx3-file my-transaction.tx3
+
+# 4. Build the transaction
+cshell tx construct build --tx3-file my-transaction.tx3
+```
+
+### Additional Help
+
+Each subcommand has its own help documentation:
+
+```bash
+cshell tx construct wizard --help
+cshell tx construct add-input --help
+cshell tx construct add-output --help
+cshell tx construct build --help
+```
+
+---
+
+## tx resolve
+
+The `tx resolve` command converts a tx3 file into CBOR format without signing or submitting it. This is useful for inspecting transaction details or preparing transactions for external signing.
+
+### Usage
+
+```bash
+cshell tx resolve --tx3-file <path-to-tx3-file>
+```
+
+### Options
+
+Run `cshell tx resolve --help` to see all available options.
+
+### Examples
+
+#### Basic Resolution
+
+```bash
+cshell tx resolve --tx3-file ./transfer.tx3
+```
+
+This outputs the resolved CBOR transaction to stdout.
+
+<Aside type="note">
+The resolved transaction is in CBOR format, which is a binary format.
+</Aside>
+
+#### With Different Provider
+
+```bash
+cshell tx resolve --tx3-file ./transfer.tx3 --provider testnet
+```
+
+---
+
+## tx sign
+
+The `tx sign` command signs a CBOR transaction with your wallet's private keys, preparing it for submission to the blockchain.
+
+### Usage
+
+```bash
+cshell tx sign <unsigned-cbor>
+```
+
+### Options
+
+Run `cshell tx sign --help` to see all available options.
+
+### Examples
+
+#### Basic Signing
+
+```bash
+# Sign a resolved transaction
+cshell tx sign <unsigned-cbor>
+```
+
+The signed transaction will be output to stdout.
+
+#### Specify Output File
+
+```bash
+cshell tx sign <unsigned-cbor> > signed.cbor
+```
+
+#### Sign with Specific Wallet
+
+If you have multiple wallets, specify which one to use:
+
+```bash
+cshell tx sign <unsigned-cbor> --signer my-wallet
+```
+
+### Workflow
+
+Typically used as part of a manual transaction workflow:
+
+```bash
+# 1. Resolve the transaction
+cshell tx resolve --tx3-file transfer.tx3 
+
+# 2. Sign the transaction
+cshell tx sign <unsigned-cbor>
+
+# 3. Submit to blockchain
+cshell tx submit <signed-cbor>
+```
+
+<Aside type="note">
+If you're using `tx invoke`, signing happens automatically. Use `tx sign` separately only for advanced workflows.
+</Aside>
+
+---
+
+## tx submit
+
+The `tx submit` command broadcasts a signed CBOR transaction to the Cardano blockchain via your configured TRP provider.
+
+### Usage
+
+```bash
+cshell tx submit <signed-cbor>
+```
+
+### Options
+
+Run `cshell tx submit --help` to see all available options.
+
+### Examples
+
+#### Basic Submission
+
+```bash
+cshell tx submit <signed-cbor>
+```
+
+Successful submission returns a transaction hash:
+
+```
+Submitted TX: <signed-cbor>
+TX Hash: 8f3a2b1c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2
+```
+
+#### With Different Provider
+
+Submit to a specific provider:
+
+```bash
+cshell tx submit <signed-cbor> --provider mainnet
+```
+
+#### Save Transaction Hash
+
+Capture the transaction hash for later reference:
+
+```bash
+cshell tx submit <signed-cbor> > tx-submit-result.txt
+```
+
+### Complete Workflow
+
+Here's the full manual transaction workflow:
+
+```bash
+# 1. Resolve transaction
+cshell tx resolve --tx3-file transfer.tx3
+
+# 2. Sign transaction
+cshell tx sign <unsigned-cbor>
+
+# 3. Submit to blockchain
+cshell tx submit <signed-cbor>
+
+# 4. Monitor transaction (using the returned hash)
+cshell search transaction <tx-hash>
+```
+
+<Aside type="tip">
+For most use cases, `tx invoke` handles all these steps automatically. Use the individual commands for advanced workflows or debugging.
+</Aside>
+
+### Verifying Submission
+
+After submitting, verify your transaction:
+
+#### Using Cshell Explorer
+
+<Aside type="note">
+Cshell explorer should be open before submitting transactions to see real-time updates.
+</Aside>
+
+```bash
+# Open explorer and check recent transactions
+cshell explorer
+```
+
+Navigate to the Transactions tab to see your submitted transaction.
+
+#### Using Search Command
+
+```bash
+# Search by transaction hash
+cshell search transaction <tx-hash>
+```
+
+#### Check Wallet Balance
+
+```bash
+# Verify balance changes
+cshell wallet balance
+```
+
+---
+
+## Quick Reference
+
+<Aside type="note">
+Use `--help` with any command to view all available options:
+```bash
+cshell tx --help
+cshell tx invoke --help
+cshell tx construct --help
+cshell tx resolve --help
+cshell tx sign --help
+cshell tx submit --help
+```
+</Aside>
