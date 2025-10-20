@@ -91,7 +91,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
         }
 
         OutputFormat::Table => {
-            println!("Tx Hash: {}", hex::encode(&hash));
+            println!("Tx Hash: {}", &hash);
             println!("Tx CBOR: {}", hex::encode(&cbor));
         }
     }

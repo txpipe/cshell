@@ -1,0 +1,305 @@
+---
+title: Search Commands
+sidebar:
+  order: 6
+  label: search
+---
+
+import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `search` command allows you to query blockchain data directly from the command line. You can search for blocks and transactions using various parameters.
+
+<Aside type="note">
+Search uses your configured UtxoRPC provider to fetch on-chain data.
+</Aside>
+
+## Available Commands
+
+- **`search block`**: Query block information by tx-hash,slot
+- **`search transaction`**: Query transaction details by hash
+
+## Output Formats
+
+All search commands support multiple output formats:
+
+```bash
+# Table format (default)
+cshell search block <tx-hash,slot>
+
+# JSON format
+cshell search block <tx-hash,slot> --output-format json
+```
+
+### Supported Formats
+
+- **table**: Human-readable table format (default)
+- **json**: Machine-readable JSON format
+
+<Aside type="tip">
+Use JSON format when integrating Cshell into scripts or other tools.
+</Aside>
+
+---
+
+## search block
+
+The `search block` command queries blockchain data to retrieve information about a specific block.
+
+### Usage
+
+```bash
+cshell search block <tx-hash,slot>
+```
+
+### Options
+
+Run `cshell search block --help` to see all available options.
+
+#### Output Format
+
+Use the `--output-format` flag to change the output format:
+
+```bash
+cshell search block <tx-hash,slot> --output-format json
+```
+
+Supported formats:
+- `table` (default): Human-readable table
+- `json`: Machine-readable JSON
+
+### Block Identifiers
+
+You can search for blocks using:
+
+```bash
+cshell search block 9a28855928d8a94ac0ec7a5c0a45298cdbf939d1f302deb2b9e54bafb48789f4,91460405
+```
+
+### Examples
+
+#### Basic Block Query
+
+<Tabs>
+  <TabItem label="Table Format">
+```bash
+cshell search block <tx-hash,slot>
+```
+
+Output:
+```
+┌──────────────┬────┬───────────────────────────────────┬────────┬─────────┬──────────────┬────────────┬────────┐
+│ Block        │    │ Hash                              │ Inputs │ Outputs │ Certificates │ Ref Inputs │ Datum  │
+├──────────────┼────┼───────────────────────────────────┼────────┼─────────┼──────────────┼────────────┼────────┤
+│ 8f3a...1f2   │ 0  │ 7b2c3d4e5f6a7b8c9d0e1f2a3b4c5...  │ 2      │ 3       │ 0            │ 0          │ empty  │
+│ 8f3a...1f2   │ 1  │ 9c1d2e3f4a5b6c7d8e9f0a1b2c3d4...  │ 1      │ 2       │ 0            │ 0          │ empty  │
+└──────────────┴────┴───────────────────────────────────┴────────┴─────────┴──────────────┴────────────┴────────┘
+```
+  </TabItem>
+  <TabItem label="JSON Format">
+```bash
+cshell search block <tx-hash,slot> --output-format json
+```
+
+Output:
+```json
+{
+  "auxiliary": {},
+  "collateral": {},
+  "fee": "200000",
+  "hash": "....",
+  "inputs": [
+    ...
+  ],
+  "outputs": [
+    ...
+  ],
+  "successful": true,
+  "validity": {},
+  "witnesses": {
+    ...
+  }
+}
+```
+  </TabItem>
+</Tabs>
+
+#### Export Block Data
+
+Save block data to a file for later analysis:
+
+```bash
+cshell search block <tx-hash,slot> --output-format json > block-data.json
+```
+
+---
+
+## search transaction
+
+The `search transaction` command queries blockchain data to retrieve detailed information about a specific transaction.
+
+### Usage
+
+```bash
+cshell search transaction <tx-hash>
+```
+
+### Options
+
+Run `cshell search transaction --help` to see all available options.
+
+#### Output Format
+
+Use the `--output-format` flag to change the output format:
+
+```bash
+cshell search transaction <tx-hash> --output-format json
+```
+
+Supported formats:
+- `table` (default): Human-readable table
+- `json`: Machine-readable JSON
+
+### Examples
+
+#### Basic Transaction Query
+
+<Tabs>
+  <TabItem label="Table Format">
+```bash
+cshell search transaction ef6350af39d35caa3130218f8fb103fa6bb585258d52366966ede8da2100d3c1
+```
+
+Output:
+```
+┌──────────────┬────┬───────────────────────────────────┬────────┬─────────┬──────────────┬────────────┬─────────┐
+│ Block        │    │ Hash                              │ Inputs │ Outputs │ Certificates │ Ref Inputs │ Datum   │
+├──────────────┼────┼───────────────────────────────────┼────────┼─────────┼──────────────┼────────────┼─────────┤
+│ f55c...19db  │ 0  │ ef6350af39d35caa3130218f8fb10...  │ 1      │ 2       │ 0            │ 1          │ contain │
+└──────────────┴────┴───────────────────────────────────┴────────┴─────────┴──────────────┴────────────┴─────────┘
+```
+  </TabItem>
+  <TabItem label="JSON Format">
+```bash
+cshell search transaction <tx-hash> --output-format json
+```
+
+Output:
+```json
+{
+  "auxiliary": {},
+  "collateral": {},
+  "fee": "174389",
+  "hash": "72NQrznTXKoxMCGPj7ED+mu1hSWNUjZpZu3o2iEA08E=",
+  "inputs": [
+    {
+      "outputIndex": 1,
+      "txHash": "2IQhCcVhqReK7BKTf604tlW/mG1LyDA3tKfX4eE9XBY="
+    }
+  ],
+  "outputs": [
+    {
+      "address": "cIe32DcyeHxWkqWXPdWwJEdAYiQQa6InY+6DaNY=",
+      "coin": "30000000",
+      "datum": {
+        ...
+      }
+    },
+    {
+      "address": "AFmvO2CJMAJJi9D8hL1k+Eh+7LDfhFrZ5gkyqoZ06yLq0b9uxm0QfpFnclhfG8g5C3ZJj74KBTZe",
+      "coin": "9729302444",
+      "datum": {}
+    }
+  ],
+  "referenceInputs": [
+    ...
+  ],
+  "successful": true,
+  "validity": {},
+  "witnesses": {
+    ...
+  }
+}
+```
+  </TabItem>
+</Tabs>
+
+#### Export Transaction Data
+
+Save transaction details to a file:
+
+```bash
+cshell search transaction <tx-hash> --output-format json > transaction.json
+```
+
+#### Check Transaction Outputs
+
+Extract specific outputs from a transaction:
+
+```bash
+cshell search transaction <tx-hash> --output-format json | jq '.outputs'
+```
+
+### Use Cases
+
+#### 1. Transaction Confirmation
+
+Verify your submitted transaction:
+
+```bash
+cshell search transaction <your-tx-hash>
+```
+
+If found, the transaction was successfully submitted and confirmed.
+
+#### 2. UTxO Verification
+
+Check if a specific UTxO exists and is unspent:
+
+```bash
+cshell search transaction <tx-hash> --output-format json | jq '.outputs[0]'
+```
+
+#### 3. Payment Verification
+
+Confirm payment was received:
+
+```bash
+# Search for transaction
+cshell search transaction <tx-hash> --output-format json
+
+# Check outputs for your address
+jq '.outputs[] | select(.address == "addr1...")' transaction.json
+```
+
+#### 4. Smart Contract Debugging
+
+Inspect transaction datum and redeemers:
+
+```bash
+cshell search transaction <tx-hash> --output-format json | jq '.outputs[].datum'
+```
+
+#### 5. Token Verification
+
+Check native token transfers:
+
+```bash
+cshell search transaction <tx-hash> --output-format json | jq '.outputs[].assets'
+```
+
+## Quick Reference
+
+<Aside type="note">
+Use `--help` with any command to view all available options:
+```bash
+cshell search --help
+cshell search block --help
+cshell search transaction --help
+```
+</Aside>
+
+## Related Commands
+
+- [`tx invoke`](/cshell/commands/tx) - Submit transactions
+- [`wallet balance`](/cshell/wallet) - Check wallet balance
+- [`explorer`](/cshell/explorer) - Visual block and transaction explorer

@@ -10,12 +10,12 @@ repository = "https://github.com/txpipe/cshell"
 license = "Apache-2.0"
 homepage = "https://docs.txpipe.io/cshell"
 
-keywords = ["cardano", "blockchain", "wallet", "cardano"]
+keywords = ["cardano", "blockchain", "wallet"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
 
 [dependencies]
-tx3-lang = "0.11.1"
-tx3-cardano = "0.11.1"
+tx3-lang = "0.11.5"
+tx3-cardano = "0.11.5"
 tx3-sdk = "^0"
 
 # tx3-lang = { git = "https://github.com/tx3-lang/tx3.git" }
