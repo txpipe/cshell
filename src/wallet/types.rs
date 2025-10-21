@@ -32,8 +32,43 @@ const VERSION_SIZE: usize = 1;
 const SALT_SIZE: usize = 16;
 const NONCE_SIZE: usize = 12;
 const TAG_SIZE: usize = 16;
+const HARDENED_KEY_START: u32 = 2147483648;
 
 pub type NewWallet = (String, Wallet);
+
+pub struct DerivationIndexes(Vec<u32>);
+impl Default for DerivationIndexes {
+    fn default() -> Self {
+        Self(vec![
+            HARDENED_KEY_START + 1852, // purpose
+            HARDENED_KEY_START + 1815, // coin type
+            HARDENED_KEY_START,        // account
+            0,                         // payment
+            0,                         // key index
+        ])
+    }
+}
+
+impl DerivationIndexes {
+    fn stake() -> Self {
+        Self(vec![
+            HARDENED_KEY_START + 1852, // purpose
+            HARDENED_KEY_START + 1815, // coin type
+            HARDENED_KEY_START,        // account
+            2,                         // stake
+            0,                         // key index
+        ])
+    }
+}
+
+impl IntoIterator for DerivationIndexes {
+    type Item = u32;
+    type IntoIter = std::vec::IntoIter<u32>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Wallet {
@@ -44,6 +79,9 @@ pub struct Wallet {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde(with = "utils::option_hex_vec_u8")]
     pub private_key: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(with = "utils::option_hex_vec_u8")]
+    pub stake_public_key: Option<Vec<u8>>,
     pub created: DateTime<Local>,
     pub modified: DateTime<Local>,
     pub is_default: bool,
@@ -58,15 +96,28 @@ impl Wallet {
         is_default: bool,
         is_unsafe: bool,
     ) -> Result<NewWallet> {
-        let (private_key, mnemonic) =
-            Bip32PrivateKey::generate_with_mnemonic(OsRng, password.to_string());
-        let public_key = private_key.to_public().as_bytes();
+        let (root, mnemonic) = Bip32PrivateKey::generate_with_mnemonic(OsRng);
 
-        let private_key = private_key.to_ed25519_private_key();
+        let mut payment = root.clone();
+        let mut stake = root.clone();
+
+        for idx in DerivationIndexes::default() {
+            payment = payment.derive(idx);
+        }
+
+        for idx in DerivationIndexes::stake() {
+            stake = stake.derive(idx);
+        }
+
+        let public_key = payment.to_public().as_bytes();
+
+        let private_key = payment.to_ed25519_private_key();
         let private_key = match is_unsafe {
             true => private_key.as_bytes(),
             false => encrypt_private_key(OsRng, private_key, &password.to_string()),
         };
+
+        let stake_public_key = Some(stake.to_public().as_bytes());
 
         Ok((
             mnemonic.to_string(),
@@ -74,6 +125,7 @@ impl Wallet {
                 name: Name::try_from(name)?,
                 private_key: Some(private_key),
                 public_key,
+                stake_public_key,
                 created: Local::now(),
                 modified: Local::now(),
                 is_default,
@@ -89,11 +141,20 @@ impl Wallet {
         is_default: bool,
         is_unsafe: bool,
     ) -> Result<Self> {
-        let private_key =
-            Bip32PrivateKey::from_bip39_mnenomic(mnemonic.to_string(), password.to_string())?;
-        let public_key = private_key.to_public().as_bytes();
+        let mut payment = Bip32PrivateKey::from_bip39_mnenomic(mnemonic.to_string())?;
+        let mut stake = Bip32PrivateKey::from_bip39_mnenomic(mnemonic.to_string())?;
 
-        let private_key = private_key.to_ed25519_private_key();
+        for idx in DerivationIndexes::default() {
+            payment = payment.derive(idx);
+        }
+
+        for idx in DerivationIndexes::stake() {
+            stake = stake.derive(idx);
+        }
+        let public_key = payment.to_public().as_bytes();
+        let stake_public_key = stake.to_public().as_bytes();
+
+        let private_key = payment.to_ed25519_private_key();
         let private_key = match is_unsafe {
             true => private_key.as_bytes(),
             false => encrypt_private_key(OsRng, private_key, &password.to_string()),
@@ -103,6 +164,7 @@ impl Wallet {
             name: Name::try_from(name)?,
             private_key: Some(private_key),
             public_key,
+            stake_public_key: Some(stake_public_key),
             created: Local::now(),
             modified: Local::now(),
             is_default,
@@ -116,19 +178,27 @@ impl Wallet {
                 .to_ed25519_pubkey(),
             None => PublicKey::from_str(&hex::encode(&self.public_key)).unwrap(),
         };
+        let delegation_part = match self.stake_public_key.as_ref() {
+            Some(pk) => ShelleyDelegationPart::key_hash(
+                Bip32PublicKey::from_bytes(pk.clone().try_into().unwrap())
+                    .to_ed25519_pubkey()
+                    .compute_hash(),
+            ),
+            None => ShelleyDelegationPart::Null,
+        };
 
         if is_testnet {
             ShelleyAddress::new(
                 Network::Testnet,
                 ShelleyPaymentPart::key_hash(pk.compute_hash()),
-                ShelleyDelegationPart::Null,
+                delegation_part,
             )
             .into()
         } else {
             ShelleyAddress::new(
                 Network::Mainnet,
                 ShelleyPaymentPart::key_hash(pk.compute_hash()),
-                ShelleyDelegationPart::Null,
+                delegation_part,
             )
             .into()
         }
@@ -159,11 +229,8 @@ impl Wallet {
             .map(|x| x.clone().to_vec())
             .unwrap_or_default();
 
-        let public_key = Bip32PublicKey::from_bytes(self.public_key.clone().try_into().unwrap())
-            .to_ed25519_pubkey();
-
         vkey_witnesses.push(VKeyWitness {
-            vkey: public_key.as_ref().to_vec().into(),
+            vkey: private_key.public_key().as_ref().to_vec().into(),
             signature: signature.as_ref().to_vec().into(),
         });
 
@@ -370,7 +437,7 @@ impl TryFrom<&[u8]> for PrivateKey {
 }
 
 /// Ed25519-BIP32 HD Private Key
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Bip32PrivateKey(ed25519_bip32::XPrv);
 impl Bip32PrivateKey {
     const BECH32_HRP: &'static str = "xprv";
@@ -383,10 +450,7 @@ impl Bip32PrivateKey {
         Self(xprv)
     }
 
-    pub fn generate_with_mnemonic<T: RngCore + CryptoRng>(
-        mut rng: T,
-        password: String,
-    ) -> (Self, Mnemonic) {
+    pub fn generate_with_mnemonic<T: RngCore + CryptoRng>(mut rng: T) -> (Self, Mnemonic) {
         let mut buf = [0u8; 64];
         rng.fill_bytes(&mut buf);
 
@@ -396,9 +460,9 @@ impl Bip32PrivateKey {
 
         let mut pbkdf2_result = [0; XPRV_SIZE];
 
-        const ITER: u32 = 4096; // TODO: BIP39 says 2048, CML uses 4096?
+        const ITER: u32 = 4096;
 
-        let mut mac = Hmac::new(Sha512::new(), password.as_bytes());
+        let mut mac = Hmac::new(Sha512::new(), &[]);
         pbkdf2(&mut mac, &entropy, ITER, &mut pbkdf2_result);
 
         (Self(XPrv::normalize_bytes_force3rd(pbkdf2_result)), bip39)
@@ -414,15 +478,15 @@ impl Bip32PrivateKey {
         self.0.as_ref().to_vec()
     }
 
-    pub fn from_bip39_mnenomic(mnemonic: String, password: String) -> Result<Self> {
-        let bip39 = Mnemonic::parse(mnemonic).context("Error parsing mnemonic")?;
+    pub fn from_bip39_mnenomic(mnemonic: String) -> Result<Self> {
+        let bip39 = Mnemonic::parse(&mnemonic).context("Error parsing mnemonic")?;
         let entropy = bip39.to_entropy();
 
         let mut pbkdf2_result = [0; XPRV_SIZE];
 
-        const ITER: u32 = 4096; // TODO: BIP39 says 2048, CML uses 4096?
+        const ITER: u32 = 4096;
 
-        let mut mac = Hmac::new(Sha512::new(), password.as_bytes());
+        let mut mac = Hmac::new(Sha512::new(), &[]);
         pbkdf2(&mut mac, &entropy, ITER, &mut pbkdf2_result);
 
         Ok(Self(XPrv::normalize_bytes_force3rd(pbkdf2_result)))
@@ -648,10 +712,9 @@ mod tests {
 
     #[test]
     fn mnemonic_roundtrip() {
-        let (xprv, mne) = Bip32PrivateKey::generate_with_mnemonic(OsRng, "".into());
+        let (xprv, mne) = Bip32PrivateKey::generate_with_mnemonic(OsRng);
 
-        let xprv_from_mne =
-            Bip32PrivateKey::from_bip39_mnenomic(mne.to_string(), "".into()).unwrap();
+        let xprv_from_mne = Bip32PrivateKey::from_bip39_mnenomic(mne.to_string()).unwrap();
 
         assert_eq!(xprv, xprv_from_mne)
     }
