@@ -1,7 +1,5 @@
 #!/bin/bash
 
-alias cshell="cargo run -- "
-
 # Validate arguments
 if [ $# -ne 3 ]; then
   echo "Error: exactly 3 arguments are required"
