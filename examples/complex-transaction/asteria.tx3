@@ -1,0 +1,135 @@
+party Player;
+
+policy SpacetimePolicy {
+    hash: 0xb6c5e14f31af0c92515ce156625afc4749e30ceef178cfae1f929fff,
+    ref: 0x81667fe89e20c352a8428f68efd0c9db1fef6cd15aa36ad4423797bb2c401431#1,
+}
+
+policy AsteriaPolicy {
+    hash: 0xb16a0775a5e045b482ab2a98e241c9347f8ffe265bb6acd10452a6cc,
+    ref: 0x81667fe89e20c352a8428f68efd0c9db1fef6cd15aa36ad4423797bb2c401431#0,
+}
+
+asset Fuel = 0x98b1c97b219c102dd0e9ba014481272d6ec069ec3ff47c63e291f1b7."FUEL";
+asset AdminToken = 0x516238dd0a79bac4bebe041c44bad8bf880d74720733d2fc0d255d28."asteriaAdmin";
+
+type ShipDatum {
+    pos_x: Int,
+    pos_y: Int,
+    ship_token_name: Bytes,
+    pilot_token_name: Bytes,
+    last_move_latest_time: Int,
+}
+
+type AsteriaDatum {
+    ship_counter: Int,
+    shipyard_policy: Bytes,
+}
+
+type AsteriaRedeemer {
+  AddNewShip,
+  Mine,
+  ConsumeAsteria,
+}
+
+type ShipyardRedeemer {
+  MintShip,
+  BurnShip,
+}
+
+type FuelRedeemer {
+  MintFuel,
+  BurnFuel,
+}
+
+tx create_ship(
+    p_pos_x: Int, // Ship Position X
+    p_pos_y: Int, // Ship Position Y
+    ship_name: Bytes, // Name of the ship
+    pilot_name: Bytes, // Name of the pilot
+    tip_slot: Int, // TODO: remove when tip_slot() implemented
+    last_move_timestamp: Int,
+) {
+    locals {
+        initial_fuel: 5, // Should be taken from spaceTime datum
+        ship_mint_lovelace_fee: 1000000, // Should be taken from asteria script datum
+        spacetime_policy_hash: 0xb6c5e14f31af0c92515ce156625afc4749e30ceef178cfae1f929fff,
+        spacetime_policy_ref: 0x81667fe89e20c352a8428f68efd0c9db1fef6cd15aa36ad4423797bb2c401431#1,
+        asteria_policy_ref: 0x81667fe89e20c352a8428f68efd0c9db1fef6cd15aa36ad4423797bb2c401431#0,
+        pellet_policy_ref: 0x81667fe89e20c352a8428f68efd0c9db1fef6cd15aa36ad4423797bb2c401431#2,
+    }
+
+    validity {
+        until_slot: tip_slot, // tip_slot() + 300
+    }
+
+    reference SpacetimeRef {
+        ref: spacetime_policy_ref,
+    }
+
+    reference AsteriaRef {
+        ref: asteria_policy_ref,
+    }
+
+    reference PelletRef {
+        ref: pellet_policy_ref,
+    }
+
+    input* gas {
+        from: Player,
+        min_amount: fees + Ada(ship_mint_lovelace_fee) + min_utxo(pilot_token) + min_utxo(new_ship) + min_utxo(gas_change),
+    }
+
+    input asteria {
+        from: AsteriaPolicy,
+        min_amount: AdminToken(1),
+        datum_is: AsteriaDatum,
+        redeemer: AsteriaRedeemer::AddNewShip {},
+    }
+    
+    mint {
+        amount: AnyAsset(spacetime_policy_hash, pilot_name, 1) + AnyAsset(spacetime_policy_hash, ship_name, 1),
+        redeemer: ShipyardRedeemer::MintShip {},
+    }
+
+    mint {
+        amount: Fuel(initial_fuel),
+        redeemer: FuelRedeemer::MintFuel {},
+    }
+
+    output pilot_token {
+        to: Player,
+        amount: AnyAsset(spacetime_policy_hash, pilot_name, 1) + min_utxo(pilot_token),
+    }
+
+    output updated_asteria {
+        to: AsteriaPolicy,
+        amount: asteria + Ada(ship_mint_lovelace_fee),
+        datum: AsteriaDatum {
+            ship_counter: asteria.ship_counter + 1,
+            shipyard_policy: asteria.shipyard_policy,
+        },
+    }
+
+    output new_ship {
+        to: SpacetimePolicy,
+        amount: AnyAsset(spacetime_policy_hash, ship_name, 1) + Fuel(initial_fuel) + min_utxo(new_ship),
+        datum: ShipDatum {
+            pos_x: p_pos_x,
+            pos_y: p_pos_y,
+            ship_token_name: ship_name,
+            pilot_token_name: pilot_name,
+            last_move_latest_time: last_move_timestamp,
+        },
+    }
+
+    output gas_change {
+        to: Player,
+        amount: gas - fees - Ada(ship_mint_lovelace_fee) - min_utxo(pilot_token) - min_utxo(new_ship),
+    }
+
+    collateral {
+        from: Player,
+        min_amount: fees,
+    }
+}
