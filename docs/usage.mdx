@@ -4,49 +4,132 @@ sidebar:
   order: 3
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-With Cshell fully configured ([provider](/cshell/provider) and [wallet](/cshell/wallet)), it's time to start using it to manage transactions or fetch on-chain data.
-
-You can execute any transaction in Cshell using [**tx3**](https://docs.txpipe.io/tx3). Cshell will call the TRP to resolve and submit the transaction.
+With Cshell fully configured ([provider](/cshell/provider) and [wallet](/cshell/wallet)), you're ready to manage transactions and explore blockchain data.
 
 <Aside type="tip">
-Use `--help` to view the CLI options.
-</Aside>
-
-<Aside type="note">
-The `--help` flag can be used anywhere in Cshell
-</Aside>
-
-## Commands
-The commands below are used to handle transactions and fetch on-chain data.
-
-### Transactions
-You can manage transactions by using Cshell's `tx` or `transactions` commands. To see which tx commands are available, run the following:
-
+Use `--help` with any command to view all available options:
 ```bash
+cshell --help
 cshell tx --help
-```
-
-Use the `--help` flag with any command to view its available options.
-
-```bash
-cshell tx invoke --help 
-```
-
-### Search
-You can search by block or transactions using the commands search. To see which search commands are available, run the following
-
-<Aside type="note">
-Use the `--output-format` flag to change the output format, it supports `json`, `table`. Default is `table`.
-</Aside>
-
-```bash
 cshell search --help
 ```
+</Aside>
 
-Use the `--help` flag with any command to view its available options.
+## Quick Start
+
+### Execute a Transaction
+
+The quickest way to submit a transaction is using [**tx3**](https://docs.txpipe.io/tx3) files:
 
 ```bash
-cshell search block --help
+cshell tx invoke --tx3-file ./my-transaction.tx3
 ```
+
+This will resolve, sign, and submit your transaction in one step.
+
+### Search Blockchain Data
+
+Query blocks and transactions:
+
+```bash
+# Search for a specific block
+cshell search block <block-hash>
+
+# Search for a transaction
+cshell search transaction <tx-hash>
+```
+
+### Explore with GUI
+
+Launch the terminal-based explorer:
+
+```bash
+cshell explorer
+```
+
+## Available Commands
+
+Cshell provides several command groups for different operations:
+
+<CardGrid>
+  <LinkCard 
+    title="Transaction Commands" 
+    href="/cshell/commands/tx" 
+    description="Create, sign, and submit transactions using tx3 or manual construction" 
+  />
+  <LinkCard 
+    title="Search Commands" 
+    href="/cshell/commands/search" 
+    description="Query blockchain data for blocks and transactions" 
+  />
+  <LinkCard 
+    title="Wallet Commands" 
+    href="/cshell/wallet" 
+    description="Create, import, and manage your wallets" 
+  />
+  <LinkCard 
+    title="Provider Commands" 
+    href="/cshell/provider" 
+    description="Configure UtxoRPC and TRP connections" 
+  />
+  <LinkCard 
+    title="Explorer" 
+    href="/cshell/explorer" 
+    description="Interactive terminal UI for blockchain exploration" 
+  />
+</CardGrid>
+
+## Common Workflows
+
+### Send ADA
+
+```bash
+# 1. Create a tx3 file describing the transfer
+# 2. Execute the transaction
+cshell tx invoke --tx3-file ./transfer.tx3
+```
+
+### Mint Tokens
+
+```bash
+# 1. Create a tx3 file with minting instructions
+# 2. Execute the transaction
+cshell tx invoke --tx3-file ./mint-token.tx3
+```
+
+### Verify a Transaction
+
+```bash
+# After submission, verify it was confirmed
+cshell search transaction <tx-hash>
+```
+
+### Check Wallet Balance
+
+```bash
+cshell wallet balance
+```
+
+## Output Formats
+
+Many commands support multiple output formats:
+
+```bash
+# Human-readable table (default)
+cshell search block <hash>
+
+# Machine-readable JSON
+cshell search block <hash> --output-format json
+```
+
+<Aside type="note">
+Use JSON format when integrating Cshell into scripts or other automation tools.
+</Aside>
+
+## Next Steps
+
+- Learn about [transaction commands](/cshell/commands/tx) for managing transactions
+- Explore [search commands](/cshell/commands/search) for querying blockchain data
+- Check out the [examples](https://github.com/txpipe/cshell/tree/main/examples) for sample tx3 files

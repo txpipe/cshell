@@ -1,0 +1,27 @@
+party Minter;
+
+tx mint_token (
+  token_policy: Bytes,
+  token_name: Bytes,
+  quantity: Int,
+) {
+
+  locals {
+    token: AnyAsset(token_policy, token_name, quantity),
+  }
+
+  input source {
+    from: Minter,
+    min_amount: fees,
+  }
+
+  mint {
+    amount: token,
+    redeemer: (),
+  }
+
+  output destination {
+    to: Minter,
+    amount: source + token - fees,
+  }
+}
