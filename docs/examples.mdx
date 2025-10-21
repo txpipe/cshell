@@ -1,0 +1,79 @@
+---
+title: Examples
+sidebar:
+  order: 5
+---
+
+In the CShell [repo](https://github.com/txpipe/cshell) you can find scripts demonstrating advanced capabilities.
+
+## Batch transactions
+
+This example shows how to send transactions to multiple recipients in a batch.
+
+**Location:** [`examples/batch-transactions/`](https://github.com/txpipe/cshell/tree/main/examples/batch-transactions)
+
+**Usage:**
+```sh
+./transfer.sh <sender_wallet> <receiver_wallets_list> <lovelace_amount>
+```
+
+**Arguments:**
+- `sender_wallet`: Name of the wallet sending the funds (e.g., `alice`)
+- `receiver_wallets_list`: Comma-separated list of recipient wallet names (e.g., `bob,charlie,mark`)
+- `lovelace_amount`: Amount in lovelaces to send to each recipient (e.g., `1000000`)
+
+**Example:**
+```sh
+./transfer.sh alice bob,charlie,mark 1000000
+```
+
+This will send 1,000,000 lovelaces from Alice's wallet to Bob, Charlie, and Mark individually.
+
+## Scheduled tasks
+
+This example demonstrates how to schedule recurring transactions using cron expressions.
+
+**Location:** [`examples/scheduled-tasks/`](https://github.com/txpipe/cshell/tree/main/examples/scheduled-tasks)
+
+**Usage:**
+```sh
+./transfer.sh <sender_wallet> <receiver_wallet> <lovelace_amount> <cron_string>
+```
+
+**Arguments:**
+- `sender_wallet`: Name of the wallet sending the funds (e.g., `alice`)
+- `receiver_wallet`: Name of the recipient wallet (e.g., `bob`)
+- `lovelace_amount`: Amount in lovelaces to send (e.g., `1000000`)
+- `cron_string`: Cron schedule expression in the format `'minute hour day month weekday'`
+
+**Example:**
+```sh
+./transfer.sh alice bob 1000000 '0 */2 * * *'
+```
+
+This will schedule a transfer of 1,000,000 lovelaces from Alice to Bob every 2 hours.
+
+## Complex transaction
+
+This example shows how to interact with a protocol that requires several parameters, specifically creating a ship in [Asteria](https://asteria.txpipe.io).
+
+**Location:** [`examples/complex-transaction/`](https://github.com/txpipe/cshell/tree/main/examples/complex-transaction)
+
+**Usage:**
+```sh
+./create-ship.sh <player_wallet> <pos_x> <pos_y>
+```
+
+**Arguments:**
+- `player_wallet`: Name of the player's wallet (e.g., `alice`)
+- `pos_x`: X coordinate for the ship position (integer)
+- `pos_y`: Y coordinate for the ship position (integer)
+
+**Example:**
+```sh
+./create-ship.sh alice 25 25
+```
+
+This will create a new ship for Alice at coordinates (25, 25) in [Asteria](https://asteria.txpipe.io).
+
+> Note: you need to use a provider with the Cardano preview testnet in order to submit this transaction
