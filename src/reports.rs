@@ -54,19 +54,19 @@ impl ErrorReport {
         if !self.details.is_empty() {
             let _ = writeln!(stderr, "   details:");
             for (key, value) in &self.details {
-                let _ = writeln!(stderr, "   ∙ {}: {}", key, value);
+                let _ = writeln!(stderr, "   ∙ {key}: {value}");
             }
         }
 
         // Print help message if available
         if let Some(help) = &self.help {
-            let _ = writeln!(stderr, "💡 {}", help);
+            let _ = writeln!(stderr, "💡 {help}");
         }
 
         if !self.logs.is_empty() {
             let _ = writeln!(stderr, "   logs:");
             for log in &self.logs {
-                let _ = writeln!(stderr, "   ‣ {}", log);
+                let _ = writeln!(stderr, "   ‣ {log}");
             }
         }
 
@@ -79,7 +79,7 @@ impl std::fmt::Display for ErrorReport {
         write!(f, "Error: {} (Type: {})", self.message, self.kind)?;
 
         if let Some(code) = self.code {
-            write!(f, " [Code: {}]", code)?;
+            write!(f, " [Code: {code}]")?;
         }
 
         if !self.details.is_empty() {
@@ -87,7 +87,7 @@ impl std::fmt::Display for ErrorReport {
         }
 
         if let Some(help) = &self.help {
-            write!(f, " - Help: {}", help)?;
+            write!(f, " - Help: {help}")?;
         }
 
         Ok(())
