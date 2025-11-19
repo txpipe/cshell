@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### 🚀 Features
+
+- *(wallet)* Add `wallet utxos` command that returns the current wallet's on-chain UTxO set in JSON format by default
+
 ## [0.11.1] - 2025-08-06
 
 ### 🐛 Bug Fixes

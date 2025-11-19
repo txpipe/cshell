@@ -61,3 +61,13 @@ And the `--help` flag can be used anywhere in Cshell. For example, after choosin
 ```bash
 cshell wallet create --help
 ```
+
+### Inspect wallet UTxOs
+
+Retrieve the live UTxO set for the currently selected wallet. The response defaults to JSON, mirroring the exact schema returned by the configured UTxoRPC provider.
+
+```bash
+cshell wallet utxos
+```
+
+Use `--output-format table` if you prefer a tabular summary in the terminal.

@@ -96,21 +96,23 @@ pub struct Context {
     pub store: store::Store,
     pub output_format: output::OutputFormat,
     pub log_level: LogLevel,
+    pub output_format_overridden: bool,
 }
 
 impl Context {
     fn from_cli(cli: &Cli) -> anyhow::Result<Self> {
         let store = store::Store::open(cli.store_path.clone())?;
-        let output_format = cli
-            .output_format
-            .clone()
-            .unwrap_or(output::OutputFormat::Table);
+        let (output_format, output_format_overridden) = match cli.output_format.clone() {
+            Some(value) => (value, true),
+            None => (output::OutputFormat::Table, false),
+        };
         let log_level = cli.log_level.clone().unwrap_or(LogLevel::Info);
 
         Ok(Context {
             store,
             output_format,
             log_level,
+            output_format_overridden,
         })
     }
 
