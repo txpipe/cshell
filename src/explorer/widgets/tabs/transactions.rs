@@ -625,35 +625,31 @@ impl TxView {
             .collect()
     }
 
-    pub fn from_any_chain_tx(any_chain_tx: &query::AnyChainTx) -> Option<Self> {
-        let chain = any_chain_tx.chain.as_ref()?;
-        let block_ref = any_chain_tx.block_ref.as_ref()?;
+    pub fn from_any_chain_tx(tx: &utxorpc::ChainTx<utxorpc::spec::cardano::Tx>) -> Option<Self> {
+        let block_ref = tx.block_ref.as_ref()?;
+        let tx = tx.parsed.as_ref()?;
 
-        match chain {
-            query::any_chain_tx::Chain::Cardano(tx) => {
-                let hash = hex::encode(&tx.hash);
-                let certs = tx.certificates.len();
-                let assets = tx.outputs.iter().map(|o| o.assets.len()).sum();
-                let amount_ada = tx.outputs.iter().map(|o| o.coin).sum();
-                let datum = tx
-                    .outputs
-                    .iter()
-                    .any(|o| o.datum.as_ref().is_some_and(|d| !d.hash.is_empty()));
+        let hash = hex::encode(&tx.hash);
+        let certs = tx.certificates.len();
+        let assets = tx.outputs.iter().map(|o| o.assets.len()).sum();
+        let amount_ada = tx.outputs.iter().map(|o| o.coin).sum();
+        let datum = tx
+            .outputs
+            .iter()
+            .any(|o| o.datum.as_ref().is_some_and(|d| !d.hash.is_empty()));
 
-                Some(TxView {
-                    hash,
-                    certs,
-                    assets,
-                    amount_ada,
-                    datum,
-                    // TODO: improve to not clone the whole tx
-                    tx: Some(tx.clone()),
-                    block_slot: block_ref.slot,
-                    block_height: block_ref.height,
-                    block_hash: hex::encode(&block_ref.hash),
-                })
-            }
-        }
+        Some(TxView {
+            hash,
+            certs,
+            assets,
+            amount_ada,
+            datum,
+            // TODO: improve to not clone the whole tx
+            tx: Some(tx.clone()),
+            block_slot: block_ref.slot,
+            block_height: block_ref.height,
+            block_hash: hex::encode(&block_ref.hash),
+        })
     }
 }
 

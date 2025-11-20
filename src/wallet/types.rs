@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use bech32::{FromBase32, ToBase32};
-use bip39::rand_core::{CryptoRng, RngCore};
 use bip39::{Language, Mnemonic};
 use chrono::{DateTime, Local};
 use comfy_table::Table;
@@ -20,7 +19,7 @@ use pallas::{
         traverse::ComputeHash,
     },
 };
-use rand_core::OsRng;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::str::FromStr;
@@ -59,13 +58,17 @@ impl Wallet {
         is_unsafe: bool,
     ) -> Result<NewWallet> {
         let (private_key, mnemonic) =
-            Bip32PrivateKey::generate_with_mnemonic(OsRng, password.to_string());
+            Bip32PrivateKey::generate_with_mnemonic(bip39::rand_core::OsRng, password.to_string());
         let public_key = private_key.to_public().as_bytes();
 
         let private_key = private_key.to_ed25519_private_key();
         let private_key = match is_unsafe {
             true => private_key.as_bytes(),
-            false => encrypt_private_key(OsRng, private_key, &password.to_string()),
+            false => encrypt_private_key(
+                rand_core::UnwrapErr(rand_core::OsRng),
+                private_key,
+                &password.to_string(),
+            ),
         };
 
         Ok((
@@ -96,7 +99,11 @@ impl Wallet {
         let private_key = private_key.to_ed25519_private_key();
         let private_key = match is_unsafe {
             true => private_key.as_bytes(),
-            false => encrypt_private_key(OsRng, private_key, &password.to_string()),
+            false => encrypt_private_key(
+                rand_core::UnwrapErr(rand_core::OsRng),
+                private_key,
+                &password.to_string(),
+            ),
         };
 
         Ok(Self {
@@ -375,7 +382,10 @@ pub struct Bip32PrivateKey(ed25519_bip32::XPrv);
 impl Bip32PrivateKey {
     const BECH32_HRP: &'static str = "xprv";
 
-    pub fn generate<T: RngCore + CryptoRng>(mut rng: T) -> Self {
+    pub fn generate<Rng>(mut rng: Rng) -> Self
+    where
+        Rng: rand_core::RngCore + rand_core::CryptoRng,
+    {
         let mut buf = [0u8; XPRV_SIZE];
         rng.fill_bytes(&mut buf);
         let xprv = XPrv::normalize_bytes_force3rd(buf);
@@ -383,10 +393,10 @@ impl Bip32PrivateKey {
         Self(xprv)
     }
 
-    pub fn generate_with_mnemonic<T: RngCore + CryptoRng>(
-        mut rng: T,
-        password: String,
-    ) -> (Self, Mnemonic) {
+    pub fn generate_with_mnemonic<Rng>(mut rng: Rng, password: String) -> (Self, Mnemonic)
+    where
+        Rng: bip39::rand_core::RngCore + bip39::rand_core::CryptoRng,
+    {
         let mut buf = [0u8; 64];
         rng.fill_bytes(&mut buf);
 
@@ -526,7 +536,7 @@ impl Bip32PublicKey {
 
 pub fn encrypt_private_key<Rng>(mut rng: Rng, private_key: PrivateKey, password: &String) -> Vec<u8>
 where
-    Rng: RngCore + CryptoRng,
+    Rng: rand_core::RngCore + rand_core::CryptoRng,
 {
     let salt = {
         let mut salt = [0u8; SALT_SIZE];
@@ -643,12 +653,13 @@ mod tests {
     use super::{
         decrypt_private_key, encrypt_private_key, Bip32PrivateKey, Bip32PublicKey, PrivateKey,
     };
-    use bip39::rand_core::OsRng;
+
     use pallas::crypto::key::ed25519::{SecretKey, SecretKeyExtended};
 
     #[test]
     fn mnemonic_roundtrip() {
-        let (xprv, mne) = Bip32PrivateKey::generate_with_mnemonic(OsRng, "".into());
+        let (xprv, mne) =
+            Bip32PrivateKey::generate_with_mnemonic(bip39::rand_core::OsRng, "".into());
 
         let xprv_from_mne =
             Bip32PrivateKey::from_bip39_mnenomic(mne.to_string(), "".into()).unwrap();
@@ -658,7 +669,7 @@ mod tests {
 
     #[test]
     fn bech32_roundtrip() {
-        let xprv = Bip32PrivateKey::generate(OsRng);
+        let xprv = Bip32PrivateKey::generate(rand_core::UnwrapErr(rand_core::OsRng));
 
         let xprv_bech32 = xprv.to_bech32();
 
@@ -681,11 +692,16 @@ mod tests {
 
         // --- standard
 
-        let private_key = PrivateKey::Normal(SecretKey::new(OsRng));
+        let private_key =
+            PrivateKey::Normal(SecretKey::new(rand_core::UnwrapErr(rand_core::OsRng)));
 
         let private_key_bytes = private_key.as_bytes();
 
-        let encrypted_priv_key = encrypt_private_key(OsRng, private_key, &password.into());
+        let encrypted_priv_key = encrypt_private_key(
+            rand_core::UnwrapErr(rand_core::OsRng),
+            private_key,
+            &password.into(),
+        );
 
         let decrypted_privkey = decrypt_private_key(&password.into(), encrypted_priv_key).unwrap();
 
@@ -693,11 +709,17 @@ mod tests {
 
         // --- extended
 
-        let private_key = PrivateKey::Extended(SecretKeyExtended::new(OsRng));
+        let private_key = PrivateKey::Extended(SecretKeyExtended::new(rand_core::UnwrapErr(
+            rand_core::OsRng,
+        )));
 
         let private_key_bytes = private_key.as_bytes();
 
-        let encrypted_priv_key = encrypt_private_key(OsRng, private_key, &password.into());
+        let encrypted_priv_key = encrypt_private_key(
+            rand_core::UnwrapErr(rand_core::OsRng),
+            private_key,
+            &password.into(),
+        );
 
         let decrypted_privkey = decrypt_private_key(&password.into(), encrypted_priv_key).unwrap();
 
