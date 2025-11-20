@@ -14,8 +14,8 @@ keywords = ["cardano", "blockchain", "wallet"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
 
 [dependencies]
-tx3-lang = "0.11.5"
-tx3-cardano = "0.11.5"
+tx3-lang = "0.13.0"
+tx3-cardano = "0.13.0"
 tx3-sdk = "^0"
 
 # tx3-lang = { git = "https://github.com/tx3-lang/tx3.git" }
@@ -26,9 +26,9 @@ tx3-sdk = "^0"
 # tx3-cardano = { path = "../../tx3-lang/tx3/crates/tx3-cardano" }
 # tx3-sdk = { path = "../../tx3-lang/rust-sdk/sdk" }
 
-utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
-# utxorpc = "0.10.0"
-# utxorpc = { path = "../../../utxorpc/rust-sdk" }
+# utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
+utxorpc = "0.12.0"
+# utxorpc = { path = "../../utxorpc/rust-sdk" }
 
 bech32 = "0.9.1"
 bip39 = { version = "2.0.0", features = ["rand_core"] }
@@ -44,8 +44,8 @@ inquire = "0.7.4"
 jsonrpsee = { version = "0", features = ["client"] }
 pallas = { version = "1.0.0-alpha.2", features = ["hardano"] }
 prost = "0.13.5"
-rand = "0.8.5"
-rand_core = { version = "0.6.4" }
+rand = "0.9.2"
+rand_core = { version = "0.9.3" }
 ratatui = "0.29.0"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_with = "3.12.0"
@@ -74,4 +74,11 @@ lto = "thin"
 [workspace.metadata.release]
 push = false
 publish = false
-pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]
+pre-release-hook = [
+    "git",
+    "cliff",
+    "-o",
+    "CHANGELOG.md",
+    "--tag",
+    "{{version}}",
+]

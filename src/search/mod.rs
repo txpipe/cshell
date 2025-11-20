@@ -2,7 +2,13 @@ use anyhow::Result;
 use clap::{command, Parser, Subcommand};
 use comfy_table::Table;
 use tracing::instrument;
-use utxorpc::spec::{cardano::Tx, query, sync};
+use utxorpc::{
+    spec::{
+        cardano::Tx,
+        query::{self},
+    },
+    ChainBlock,
+};
 
 use crate::output::OutputFormatter;
 
@@ -32,7 +38,7 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> Result<()> {
     }
 }
 
-fn cardano_tx_table(block_hash: Vec<u8>, tx: &[Tx]) -> Table {
+fn cardano_tx_table(block_hash: Option<Vec<u8>>, tx: &[Tx]) -> Table {
     let mut table = Table::new();
     table.set_header(vec![
         "Block",
@@ -45,12 +51,10 @@ fn cardano_tx_table(block_hash: Vec<u8>, tx: &[Tx]) -> Table {
         "Datum",
     ]);
 
-    let block_hash = hex::encode(block_hash);
-    let block_hash_trucated = format!(
-        "{}...{}",
-        &block_hash[..4],
-        &block_hash[block_hash.len() - 4..]
-    );
+    let block_hash = block_hash
+        .map(|b| hex::encode(b))
+        .map(|x| format!("{}...{}", &x[..4], &x[x.len() - 4..]))
+        .unwrap_or_default();
 
     for (i, tx) in tx.iter().enumerate() {
         let hash = hex::encode(&tx.hash);
@@ -71,7 +75,7 @@ fn cardano_tx_table(block_hash: Vec<u8>, tx: &[Tx]) -> Table {
         };
 
         table.add_row(vec![
-            &block_hash_trucated,
+            &block_hash,
             &i.to_string(),
             &hash,
             &inputs.to_string(),
@@ -85,28 +89,31 @@ fn cardano_tx_table(block_hash: Vec<u8>, tx: &[Tx]) -> Table {
     table
 }
 
-impl OutputFormatter for Vec<sync::AnyChainBlock> {
+impl OutputFormatter for Vec<ChainBlock<utxorpc::spec::cardano::Block>> {
     fn to_table(&self) {
         for block in self {
-            if let Some(chain) = &block.chain {
-                match chain {
-                    sync::any_chain_block::Chain::Cardano(block) => {
-                        if block.header.is_none() {
-                            return;
-                        }
-                        let header = block.header.as_ref().unwrap();
-                        if let Some(body) = &block.body {
-                            let table = cardano_tx_table(header.hash.clone().into(), &body.tx);
-                            println!("{table}");
-                        }
-                    }
+            if let Some(block) = &block.parsed {
+                if block.header.is_none() {
+                    return;
+                }
+
+                let header = block.header.as_ref().unwrap();
+
+                if let Some(body) = &block.body {
+                    let table = cardano_tx_table(Some(header.hash.clone().into()), &body.tx);
+                    println!("{table}");
                 }
             }
         }
     }
 
     fn to_json(&self) {
-        let result = serde_json::to_value(self);
+        let blocks = self
+            .iter()
+            .flat_map(|x| x.parsed.as_ref())
+            .collect::<Vec<_>>();
+
+        let result = serde_json::to_value(blocks);
         if let Err(err) = result {
             eprintln!("{err}");
             return;
@@ -130,7 +137,8 @@ impl OutputFormatter for Vec<query::AnyChainBlock> {
                         }
                         let header = block.header.as_ref().unwrap();
                         if let Some(body) = &block.body {
-                            let table = cardano_tx_table(header.hash.clone().into(), &body.tx);
+                            let table =
+                                cardano_tx_table(Some(header.hash.clone().into()), &body.tx);
                             println!("{table}");
                         }
                     }
@@ -153,35 +161,30 @@ impl OutputFormatter for Vec<query::AnyChainBlock> {
     }
 }
 
-impl OutputFormatter for query::AnyChainTx {
+impl OutputFormatter for utxorpc::ChainTx<utxorpc::spec::cardano::Tx> {
     fn to_table(&self) {
-        if let Some(chain) = &self.chain {
-            match chain {
-                query::any_chain_tx::Chain::Cardano(tx) => {
-                    let block_hash = self.block_ref.as_ref().unwrap().hash.clone();
-                    let table = cardano_tx_table(block_hash.into(), std::slice::from_ref(tx));
-                    println!("{table}");
-                }
-            }
+        if let Some(parsed) = &self.parsed {
+            let table = cardano_tx_table(
+                self.block_ref.as_ref().map(|b| b.hash.clone().into()),
+                std::slice::from_ref(parsed),
+            );
+            println!("{table}");
         }
     }
 
     fn to_json(&self) {
-        if let Some(chain) = &self.chain {
-            match chain {
-                query::any_chain_tx::Chain::Cardano(tx) => {
-                    let result = serde_json::to_value(tx);
-                    if let Err(err) = result {
-                        eprintln!("{err}");
-                        return;
-                    }
+        if let Some(tx) = &self.parsed {
+            let result = serde_json::to_value(tx);
 
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&result.unwrap()).unwrap()
-                    );
-                }
+            if let Err(err) = result {
+                eprintln!("{err}");
+                return;
             }
+
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result.unwrap()).unwrap()
+            );
         }
     }
 }
