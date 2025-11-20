@@ -6,11 +6,9 @@ use pallas::ledger::addresses::Address;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use utxorpc::{
-    spec::{
-        query::{any_utxo_pattern::UtxoPattern, AnyChainTx, ReadTxRequest},
-        sync::{AnyChainBlock, BlockRef, FetchBlockRequest},
-    },
-    CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, ClientBuilder, InnerService,
+    spec::{query::any_utxo_pattern::UtxoPattern, sync::BlockRef},
+    CardanoQueryClient, CardanoSubmitClient, CardanoSyncClient, ChainBlock, ChainTx, ClientBuilder,
+    InnerService,
 };
 
 use crate::{
@@ -290,7 +288,10 @@ impl Provider {
         Ok(client.submit(tx, vec![]).await?)
     }
 
-    pub async fn fetch_block(&self, refs: Vec<(Vec<u8>, u64)>) -> Result<Vec<AnyChainBlock>> {
+    pub async fn fetch_block(
+        &self,
+        refs: Vec<(Vec<u8>, u64)>,
+    ) -> Result<Vec<ChainBlock<utxorpc::spec::cardano::Block>>> {
         let mut client: utxorpc::CardanoSyncClient = self.client().await?;
 
         let refs = refs
@@ -302,34 +303,20 @@ impl Provider {
             })
             .collect();
 
-        let request = FetchBlockRequest {
-            r#ref: refs,
-            ..Default::default()
-        };
-        let response = client
-            .fetch_block(request)
-            .await
-            .map_err(|err| anyhow::Error::msg(format!("Fetch block. {}", err.code())))?
-            .into_inner();
+        let response = client.fetch_block(refs).await?;
 
-        Ok(response.block)
+        Ok(response)
     }
 
-    pub async fn fetch_tx(&self, hash: Vec<u8>) -> Result<Option<AnyChainTx>> {
+    pub async fn fetch_tx(
+        &self,
+        hash: Vec<u8>,
+    ) -> Result<Option<ChainTx<utxorpc::spec::cardano::Tx>>> {
         let mut client: utxorpc::CardanoQueryClient = self.client().await?;
 
-        let request = ReadTxRequest {
-            hash: hash.into(),
-            ..Default::default()
-        };
+        let response = client.read_tx(hash.into()).await?;
 
-        let response = client
-            .read_tx(request)
-            .await
-            .map_err(|err| anyhow::Error::msg(format!("Fetch transaction. {}", err.code())))?
-            .into_inner();
-
-        Ok(response.tx)
+        Ok(response)
     }
 }
 

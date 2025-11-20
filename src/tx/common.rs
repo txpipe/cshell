@@ -175,6 +175,11 @@ pub fn inquire_args(
                     "tx3 arg {key} is a custom type {x}, not supported yet"
                 ));
             }
+            tx3_lang::ir::Type::Map => {
+                return Err(anyhow::anyhow!(
+                    "tx3 arg {key} is of type Map, not supported yet",
+                ));
+            }
         };
     }
 
@@ -190,8 +195,7 @@ pub fn define_args(
 ) -> Result<HashMap<String, ArgValue>> {
     let mut remaining_params = params.clone();
 
-    let mut loaded_args =
-        super::common::load_args(inline_args, file_args, &remaining_params)?;
+    let mut loaded_args = super::common::load_args(inline_args, file_args, &remaining_params)?;
 
     // remove from the remaining params the args we already managed to load from the
     // file or json

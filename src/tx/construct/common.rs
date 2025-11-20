@@ -1,11 +1,9 @@
-
-
 use std::{fs, path::PathBuf, str::FromStr};
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
+use inquire::{Confirm, Text};
 use pallas::ledger::addresses::Address;
 use serde_json::json;
-use inquire::{Text, Confirm};
 
 pub struct TransactionBuilder {
     pub ast: tx3_lang::ast::Program,
@@ -35,15 +33,14 @@ impl TransactionBuilder {
                 "span": tx3_lang::ast::Span::default(),
                 "collateral": [],
             });
-            let tx_def: tx3_lang::ast::TxDef =
-                serde_json::from_value(value)
-                    .context("Failed to materialize TxDef from JSON template")?;
+            let tx_def: tx3_lang::ast::TxDef = serde_json::from_value(value)
+                .context("Failed to materialize TxDef from JSON template")?;
 
             ast.txs.push(tx_def);
 
             def_index = Some(ast.txs.len() - 1);
         }
-        
+
         Ok(Self {
             ast: ast.clone(),
             def_index: def_index.unwrap(),
@@ -52,11 +49,10 @@ impl TransactionBuilder {
 
     pub fn from_ast(ast_path_buf: &PathBuf) -> Result<Self> {
         let ast = if ast_path_buf.exists() {
-            let ast_content = fs::read_to_string(ast_path_buf)
-                .context("Failed to read existing AST file")?;
+            let ast_content =
+                fs::read_to_string(ast_path_buf).context("Failed to read existing AST file")?;
 
-            serde_json::from_str(&ast_content)
-                .context("Failed to parse existing AST file")?
+            serde_json::from_str(&ast_content).context("Failed to parse existing AST file")?
         } else {
             tx3_lang::ast::Program::default()
         };
@@ -72,12 +68,11 @@ impl TransactionBuilder {
             let add_inputs = Confirm::new("Do you want to add inputs to your transaction?")
                 .with_default(true)
                 .prompt()?;
-    
+
             if !add_inputs {
                 return Ok(());
             }
         }
-
 
         loop {
             let input_name = Text::new("Input name:")
@@ -109,12 +104,9 @@ impl TransactionBuilder {
             //     tx3_lang::ast::DataExpr::String(tx3_lang::ast::StringLiteral::new(address.to_bech32().unwrap())),
             // ));
 
-            let txid = hex::decode(parts[0])
-                .context("Invalid txid hex in UTxO reference")?;
+            let txid = hex::decode(parts[0]).context("Invalid txid hex in UTxO reference")?;
 
-            let index = parts[1]
-                .parse::<u64>()
-                .context("Invalid UTxO index")?;
+            let index = parts[1].parse::<u64>().context("Invalid UTxO index")?;
 
             input_block.fields.push(tx3_lang::ast::InputBlockField::Ref(
                 tx3_lang::ast::DataExpr::UtxoRef(tx3_lang::ast::UtxoRef {
@@ -132,13 +124,17 @@ impl TransactionBuilder {
                 .parse::<i64>()
                 .context("Invalid minimum amount value")?;
 
-            input_block.fields.push(tx3_lang::ast::InputBlockField::MinAmount(
-                tx3_lang::ast::DataExpr::StaticAssetConstructor(tx3_lang::ast::StaticAssetConstructor {
-                    amount: Box::new(tx3_lang::ast::DataExpr::Number(min_amount_value)),
-                    span: tx3_lang::ast::Span::default(),
-                    r#type: tx3_lang::ast::Identifier::new("Ada".to_string()),
-                })
-            ));
+            input_block
+                .fields
+                .push(tx3_lang::ast::InputBlockField::MinAmount(
+                    tx3_lang::ast::DataExpr::StaticAssetConstructor(
+                        tx3_lang::ast::StaticAssetConstructor {
+                            amount: Box::new(tx3_lang::ast::DataExpr::Number(min_amount_value)),
+                            span: tx3_lang::ast::Span::default(),
+                            r#type: tx3_lang::ast::Identifier::new("Ada".to_string()),
+                        },
+                    ),
+                ));
 
             self.ast.txs[self.def_index].inputs.push(input_block);
 
@@ -162,7 +158,7 @@ impl TransactionBuilder {
             let add_outputs = Confirm::new("Do you want to add outputs to your transaction?")
                 .with_default(true)
                 .prompt()?;
-    
+
             if !add_outputs {
                 return Ok(());
             }
@@ -174,17 +170,22 @@ impl TransactionBuilder {
                 .prompt()?;
 
             let output_name = if has_name {
-                Some(Text::new("Output name:")
-                    .with_help_message("Enter output name")
-                    .prompt()?)
+                Some(
+                    Text::new("Output name:")
+                        .with_help_message("Enter output name")
+                        .prompt()?,
+                )
             } else {
                 None
             };
 
             let mut output_block = tx3_lang::ast::OutputBlock {
-                name: output_name.as_ref().map(|name| tx3_lang::ast::Identifier::new(name.clone())),
+                name: output_name
+                    .as_ref()
+                    .map(|name| tx3_lang::ast::Identifier::new(name.clone())),
                 span: tx3_lang::ast::Span::default(),
                 fields: Vec::new(),
+                optional: false,
             };
 
             let to_address = Text::new("To address:")
@@ -192,37 +193,35 @@ impl TransactionBuilder {
                 .prompt()?;
 
             // Validate address
-            let address = Address::from_str(&to_address)
-                .context("Invalid address")?;
+            let address = Address::from_str(&to_address).context("Invalid address")?;
 
             let bech32 = address
                 .to_bech32()
                 .context("Failed to encode bech32 address")?;
 
-            output_block.fields.push(tx3_lang::ast::OutputBlockField::To(
-                Box::new(tx3_lang::ast::DataExpr::String(
-                    tx3_lang::ast::StringLiteral::new(bech32)
-                )),
-            ));
+            output_block
+                .fields
+                .push(tx3_lang::ast::OutputBlockField::To(Box::new(
+                    tx3_lang::ast::DataExpr::String(tx3_lang::ast::StringLiteral::new(bech32)),
+                )));
 
-            let amount = Text::new("Amount:")
-                .with_default("1000000")
-                .prompt()?;
+            let amount = Text::new("Amount:").with_default("1000000").prompt()?;
 
-            let amount_value = amount
-                .parse::<i64>()
-                .context("Invalid Ada amount")?;
+            let amount_value = amount.parse::<i64>().context("Invalid Ada amount")?;
 
-            output_block.fields.push(tx3_lang::ast::OutputBlockField::Amount(
-                Box::new(tx3_lang::ast::DataExpr::StaticAssetConstructor(tx3_lang::ast::StaticAssetConstructor {
-                    amount: Box::new(tx3_lang::ast::DataExpr::Number(amount_value)),
-                    span: tx3_lang::ast::Span::default(),
-                    r#type: tx3_lang::ast::Identifier::new("Ada".to_string()),
-                }))
-            ));
+            output_block
+                .fields
+                .push(tx3_lang::ast::OutputBlockField::Amount(Box::new(
+                    tx3_lang::ast::DataExpr::StaticAssetConstructor(
+                        tx3_lang::ast::StaticAssetConstructor {
+                            amount: Box::new(tx3_lang::ast::DataExpr::Number(amount_value)),
+                            span: tx3_lang::ast::Span::default(),
+                            r#type: tx3_lang::ast::Identifier::new("Ada".to_string()),
+                        },
+                    ),
+                )));
 
             self.ast.txs[self.def_index].outputs.push(output_block);
-
 
             let add_more = Confirm::new("Add another output?")
                 .with_default(true)
@@ -240,34 +239,38 @@ impl TransactionBuilder {
         let mut content = String::new();
 
         // Add transaction
-        content.push_str(&format!("tx {}() {{\n", self.ast.txs[self.def_index].name.value));
+        content.push_str(&format!(
+            "tx {}() {{\n",
+            self.ast.txs[self.def_index].name.value
+        ));
 
         // Add inputs
         for input in &self.ast.txs[self.def_index].inputs {
             content.push_str(&format!("\tinput {} {{\n", input.name));
-            input.fields.iter().for_each(|field| {
-                match field {
-                    tx3_lang::ast::InputBlockField::From(
-                        tx3_lang::ast::DataExpr::String(literal)
-                    ) => {
-                        content.push_str(&format!("\t\tfrom: \"{}\",\n", literal.value));
-                    },
-                    tx3_lang::ast::InputBlockField::Ref(
-                        tx3_lang::ast::DataExpr::UtxoRef(utxoref)
-                    ) => {
-                        content.push_str(&format!("\t\tref: 0x{}#{},\n", hex::encode(&utxoref.txid), utxoref.index));
-                    },
-                    tx3_lang::ast::InputBlockField::MinAmount(
-                        tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor)
-                    ) => {
-                        let amount = match *constructor.amount {
-                            tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
-                            _ => "unknown".to_string(),
-                        };
-                        content.push_str(&format!("\t\tmin_amount: {}({}),\n", constructor.r#type.value, amount));
-                    },
-                    _ => {}
+            input.fields.iter().for_each(|field| match field {
+                tx3_lang::ast::InputBlockField::From(tx3_lang::ast::DataExpr::String(literal)) => {
+                    content.push_str(&format!("\t\tfrom: \"{}\",\n", literal.value));
                 }
+                tx3_lang::ast::InputBlockField::Ref(tx3_lang::ast::DataExpr::UtxoRef(utxoref)) => {
+                    content.push_str(&format!(
+                        "\t\tref: 0x{}#{},\n",
+                        hex::encode(&utxoref.txid),
+                        utxoref.index
+                    ));
+                }
+                tx3_lang::ast::InputBlockField::MinAmount(
+                    tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor),
+                ) => {
+                    let amount = match *constructor.amount {
+                        tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
+                        _ => "unknown".to_string(),
+                    };
+                    content.push_str(&format!(
+                        "\t\tmin_amount: {}({}),\n",
+                        constructor.r#type.value, amount
+                    ));
+                }
+                _ => {}
             });
             content.push_str("\t}\n\n");
         }
@@ -280,24 +283,27 @@ impl TransactionBuilder {
                 content.push_str("\toutput {\n");
             }
 
-            output.fields.iter().for_each(|field| {
-                match field {
-                    tx3_lang::ast::OutputBlockField::To(expr) => {
-                        if let tx3_lang::ast::DataExpr::String(literal) = expr.as_ref() {
-                            content.push_str(&format!("\t\tto: \"{}\",\n", literal.value));
-                        }
-                    },
-                    tx3_lang::ast::OutputBlockField::Amount(expr) => {
-                        if let tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor) = expr.as_ref() {
-                            let amount = match *constructor.amount {
-                                tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
-                                _ => "unknown".to_string(),
-                            };
-                            content.push_str(&format!("\t\tamount: {}({}),\n", constructor.r#type.value, amount));
-                        }
-                    },
-                    _ => {}
+            output.fields.iter().for_each(|field| match field {
+                tx3_lang::ast::OutputBlockField::To(expr) => {
+                    if let tx3_lang::ast::DataExpr::String(literal) = expr.as_ref() {
+                        content.push_str(&format!("\t\tto: \"{}\",\n", literal.value));
+                    }
                 }
+                tx3_lang::ast::OutputBlockField::Amount(expr) => {
+                    if let tx3_lang::ast::DataExpr::StaticAssetConstructor(constructor) =
+                        expr.as_ref()
+                    {
+                        let amount = match *constructor.amount {
+                            tx3_lang::ast::DataExpr::Number(num) => num.to_string(),
+                            _ => "unknown".to_string(),
+                        };
+                        content.push_str(&format!(
+                            "\t\tamount: {}({}),\n",
+                            constructor.r#type.value, amount
+                        ));
+                    }
+                }
+                _ => {}
             });
             content.push_str("\t}\n\n");
         }
