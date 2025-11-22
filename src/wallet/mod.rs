@@ -10,6 +10,7 @@ mod info;
 mod list;
 mod restore;
 pub mod types;
+mod utxos;
 
 #[derive(Parser)]
 pub struct Args {
@@ -36,6 +37,8 @@ enum Commands {
     Delete(delete::Args),
     /// show wallet balance
     Balance(balance::Args),
+    /// List wallet UTxOs
+    Utxos(utxos::Args),
 }
 
 #[instrument("wallet", skip_all)]
@@ -49,5 +52,6 @@ pub async fn run(args: Args, ctx: &mut crate::Context) -> anyhow::Result<()> {
         Commands::List => list::run(ctx).await,
         Commands::Delete(args) => delete::run(args, ctx).await,
         Commands::Balance(args) => balance::run(args, ctx).await,
+        Commands::Utxos(args) => utxos::run(args, ctx).await,
     }
 }

@@ -160,6 +160,47 @@ impl Provider {
         })
     }
 
+    pub async fn get_wallet_utxos(
+        &self,
+        address: &Address,
+    ) -> Result<Vec<utxorpc::spec::query::AnyUtxoData>> {
+        let mut client: CardanoQueryClient = self.client().await?;
+
+        let predicate = utxorpc::spec::query::UtxoPredicate {
+            r#match: Some(utxorpc::spec::query::AnyUtxoPattern {
+                utxo_pattern: Some(UtxoPattern::Cardano(
+                    utxorpc::spec::cardano::TxOutputPattern {
+                        address: Some(utxorpc::spec::cardano::AddressPattern {
+                            exact_address: address.to_vec().into(),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                )),
+            }),
+            ..Default::default()
+        };
+
+        let response = client
+            .search_utxos(predicate, None, u32::MAX)
+            .await
+            .context("failed to query utxos")?;
+
+        let utxos = response
+            .items
+            .into_iter()
+            .map(|utxo| utxorpc::spec::query::AnyUtxoData {
+                native_bytes: utxo.native,
+                txo_ref: utxo.txo_ref,
+                parsed_state: utxo
+                    .parsed
+                    .map(utxorpc::spec::query::any_utxo_data::ParsedState::Cardano),
+            })
+            .collect();
+
+        Ok(utxos)
+    }
+
     pub async fn get_detailed_balance(&self, address: &Address) -> Result<DetailedBalance> {
         let mut client: CardanoQueryClient = self.client().await?;
 

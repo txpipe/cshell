@@ -103,6 +103,14 @@ This will prompt you for a name, a kind (only UTxORPC supported), whether it is 
 
 > If you have a [Demeter](https://demeter.run) port you would have to set the URL as `https://{host}` and on put `dmtr-api-key:YOUR_API_KEY` on the headers.
 
+To inspect the current wallet's UTxOs in JSON format, run:
+
+```sh
+cargo run -- wallet utxos
+```
+
+Use `--output-format` to override the default JSON response if you prefer a table view instead.
+
 # Examples
 
 In the `examples` folder you can find scripts demonstrating advanced capabilities.

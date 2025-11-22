@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
 ## [0.11.1] - 2025-08-06
 
 ### 🐛 Bug Fixes
