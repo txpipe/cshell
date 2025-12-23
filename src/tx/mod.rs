@@ -7,7 +7,6 @@ mod invoke;
 mod resolve;
 mod sign;
 mod submit;
-mod construct;
 
 #[derive(Parser)]
 pub struct Args {
@@ -28,9 +27,6 @@ enum Commands {
 
     /// Submit a CBOR transaction
     Submit(submit::Args),
-
-    /// Construct a new transaction using tx3
-    Construct(construct::Args),
 }
 
 #[instrument("transaction", skip_all)]
@@ -40,6 +36,5 @@ pub async fn run(args: Args, ctx: &crate::Context) -> anyhow::Result<()> {
         Commands::Resolve(args) => resolve::run(args, ctx).await,
         Commands::Sign(args) => sign::run(args, ctx).await,
         Commands::Submit(args) => submit::run(args, ctx).await,
-        Commands::Construct(args) => construct::run(args, ctx).await,
     }
 }

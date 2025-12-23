@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use bech32::{FromBase32, ToBase32};
+use bech32::Bech32;
 use bip39::{Language, Mnemonic};
 use chrono::{DateTime, Local};
 use comfy_table::Table;
@@ -380,7 +380,7 @@ impl TryFrom<&[u8]> for PrivateKey {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Bip32PrivateKey(ed25519_bip32::XPrv);
 impl Bip32PrivateKey {
-    const BECH32_HRP: &'static str = "xprv";
+    const BECH32_HRP: bech32::Hrp = bech32::Hrp::parse_unchecked("xprv");
 
     pub fn generate<Rng>(mut rng: Rng) -> Self
     where
@@ -459,20 +459,14 @@ impl Bip32PrivateKey {
     }
 
     pub fn to_bech32(&self) -> String {
-        bech32::encode(
-            Self::BECH32_HRP,
-            self.as_bytes().to_base32(),
-            bech32::Variant::Bech32,
-        )
-        .unwrap()
+        bech32::encode::<Bech32>(Self::BECH32_HRP, &self.as_bytes()).unwrap()
     }
 
     pub fn from_bech32(bech32: String) -> Result<Self> {
-        let (hrp, data, _) = bech32::decode(&bech32).context("Invalid bech32")?;
+        let (hrp, data) = bech32::decode(&bech32).context("Invalid bech32")?;
         if hrp != Self::BECH32_HRP {
             bail!("Invalid bech32")
         } else {
-            let data = Vec::<u8>::from_base32(&data).context("Invalid bech32")?;
             match data.try_into() {
                 Ok(bytes) => Self::from_bytes(bytes),
                 Err(_) => bail!("Unexpected Bech32 length"),
@@ -486,7 +480,7 @@ impl Bip32PrivateKey {
 pub struct Bip32PublicKey(ed25519_bip32::XPub);
 
 impl Bip32PublicKey {
-    const BECH32_HRP: &'static str = "xpub";
+    const BECH32_HRP: bech32::Hrp = bech32::Hrp::parse_unchecked("xpub");
 
     pub fn from_bytes(bytes: [u8; 64]) -> Self {
         Self(XPub::from_bytes(bytes))
@@ -512,20 +506,14 @@ impl Bip32PublicKey {
     }
 
     pub fn to_bech32(&self) -> String {
-        bech32::encode(
-            Self::BECH32_HRP,
-            self.as_bytes().to_base32(),
-            bech32::Variant::Bech32,
-        )
-        .unwrap()
+        bech32::encode::<Bech32>(Self::BECH32_HRP, &self.as_bytes()).unwrap()
     }
 
     pub fn from_bech32(bech32: String) -> Result<Self> {
-        let (hrp, data, _) = bech32::decode(&bech32).context("Invalid Bech32")?;
+        let (hrp, data) = bech32::decode(&bech32).context("Invalid Bech32")?;
         if hrp != Self::BECH32_HRP {
             Err(anyhow::anyhow!("Invalid Bech32"))
         } else {
-            let data = Vec::<u8>::from_base32(&data).context("Invalid Bech32")?;
             match data.try_into() {
                 Ok(bytes) => Ok(Self::from_bytes(bytes)),
                 Err(_) => bail!("Unexpected Bech32 length"),

@@ -9,21 +9,21 @@ use crate::output::OutputFormat;
 
 #[derive(Parser, Clone)]
 pub struct Args {
-    /// Path for Tx3 file describing transaction
+    /// Path for TII file describing transaction invoke interface
     #[arg(long)]
-    tx3_file: PathBuf,
+    tii_file: PathBuf,
 
-    /// Json string containing args for the Tx3 transaction
+    /// Json string containing the invoke args for the transaction
     #[arg(long)]
-    tx3_args_json: Option<String>,
+    args_json: Option<String>,
 
-    /// Path for file containing args for the Tx3 transaction
+    /// Path for file containing the invoke args for the transaction
     #[arg(long)]
-    tx3_args_file: Option<PathBuf>,
+    args_file: Option<PathBuf>,
 
-    /// Template for Tx3 file
+    /// Which transaction to invoke
     #[arg(long)]
-    tx3_template: Option<String>,
+    tx_template: Option<String>,
 
     /// Wallets that will sign the transaction
     #[arg(long)]
@@ -53,17 +53,19 @@ pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
         bail!("Provider not found")
     };
 
-    let prototx = super::common::load_prototx(&args.tx3_file, args.tx3_template)?;
+    let mut invocation = super::common::prepare_invocation(&args.tii_file, args.tx_template)?;
 
-    let tx_args = super::common::define_args(
-        &prototx.find_params(),
-        args.tx3_args_json.as_deref(),
-        args.tx3_args_file.as_deref(),
+    let all_args = super::common::define_args(
+        &mut invocation,
+        args.args_json.as_deref(),
+        args.args_file.as_deref(),
         ctx,
         provider,
     )?;
 
-    let TxEnvelope { tx, hash } = super::common::resolve_tx(&prototx, tx_args, provider).await?;
+    invocation.set_args(all_args);
+
+    let TxEnvelope { tx, hash } = super::common::resolve_tx(invocation, provider).await?;
 
     let cbor = hex::decode(tx).unwrap();
 

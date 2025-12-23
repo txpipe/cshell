@@ -6,15 +6,20 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
 };
-use tx3_lang::{ArgValue, ProtoTx, Protocol, UtxoRef};
-use tx3_sdk::trp::{self, TxEnvelope};
+
+use tx3_sdk::{
+    tii::Invocation,
+    trp::{self, TxEnvelope},
+    WellKnownType,
+};
+use tx3_sdk::{ArgValue, UtxoRef};
 
 use crate::provider::types::Provider;
 
 pub fn load_args(
     inline_args: Option<&str>,
     file_args: Option<&Path>,
-    params: &BTreeMap<String, tx3_lang::ir::Type>,
+    params: &BTreeMap<String, WellKnownType>,
 ) -> Result<HashMap<String, ArgValue>> {
     let json_string = match (inline_args, file_args) {
         (Some(inline_args), None) => inline_args.to_string(),
@@ -33,7 +38,7 @@ pub fn load_args(
 
     for (key, ty) in params {
         if let Some(value) = value.remove(key) {
-            let arg_value = tx3_sdk::trp::args::from_json(value, ty)?;
+            let arg_value = tx3_sdk::interop::json::from_json(value, ty)?;
             args.insert(key.clone(), arg_value);
         }
     }
@@ -41,30 +46,32 @@ pub fn load_args(
     Ok(args)
 }
 
-pub fn load_prototx(tx3_file: &Path, tx3_template: Option<String>) -> Result<ProtoTx> {
-    let protocol = Protocol::from_file(tx3_file)
-        .load()
-        .context("parsing tx3 file")?;
+pub fn prepare_invocation(tii_file: &Path, tx: Option<String>) -> Result<Invocation> {
+    let protocol = tx3_sdk::tii::Protocol::from_file(tii_file).context("parsing tii file")?;
 
-    let txs: Vec<String> = protocol.txs().map(|x| x.name.value.to_string()).collect();
-
-    let template = match tx3_template {
+    let template = match tx {
         Some(template) => template,
         None => {
-            let template = if txs.len() == 1 {
-                txs.first().unwrap().clone()
+            let template = if protocol.txs().len() == 1 {
+                protocol.txs().keys().next().unwrap().clone()
             } else {
-                inquire::Select::new("What transaction do you want to build?", txs).prompt()?
+                let keys = protocol
+                    .txs()
+                    .keys()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<String>>();
+
+                inquire::Select::new("What transaction do you want to build?", keys).prompt()?
             };
             template
         }
     };
 
-    Ok(protocol.new_tx(&template)?)
+    Ok(protocol.invoke(&template, None)?)
 }
 
 pub fn inquire_args(
-    params: &BTreeMap<String, tx3_lang::ir::Type>,
+    params: &BTreeMap<String, WellKnownType>,
     ctx: &crate::Context,
     provider: &Provider,
 ) -> Result<HashMap<String, ArgValue>> {
@@ -74,7 +81,7 @@ pub fn inquire_args(
         let text_key = format!("{key}:");
 
         match value {
-            tx3_lang::ir::Type::Address => {
+            WellKnownType::Address => {
                 let custom_address = String::from("custom address");
                 let mut options = ctx
                     .store
@@ -104,7 +111,7 @@ pub fn inquire_args(
 
                 argvalues.insert(key.clone(), trp::ArgValue::Address(address.to_vec()));
             }
-            tx3_lang::ir::Type::Int => {
+            WellKnownType::Int => {
                 let value = inquire::Text::new(&text_key)
                     .with_help_message("Enter an integer value")
                     .prompt()?
@@ -113,7 +120,7 @@ pub fn inquire_args(
 
                 argvalues.insert(key.clone(), trp::ArgValue::Int(value.into()));
             }
-            tx3_lang::ir::Type::UtxoRef => {
+            WellKnownType::UtxoRef => {
                 let value = inquire::Text::new(&text_key)
                     .with_help_message("Enter the utxo reference as hash#idx")
                     .prompt()
@@ -130,12 +137,12 @@ pub fn inquire_args(
                 let utxo_ref = UtxoRef::new(hash.as_slice(), idx);
                 argvalues.insert(key.clone(), trp::ArgValue::UtxoRef(utxo_ref));
             }
-            tx3_lang::ir::Type::Bool => {
+            WellKnownType::Bool => {
                 let value = inquire::Confirm::new(&text_key).prompt()?;
 
                 argvalues.insert(key.clone(), trp::ArgValue::Bool(value));
             }
-            tx3_lang::ir::Type::Bytes => {
+            WellKnownType::Bytes => {
                 let value = inquire::Text::new(&text_key)
                     .with_help_message("Enter the bytes as hex string")
                     .prompt()?;
@@ -145,37 +152,37 @@ pub fn inquire_args(
                 argvalues.insert(key.clone(), trp::ArgValue::Bytes(value));
             }
 
-            tx3_lang::ir::Type::Undefined => {
+            WellKnownType::Undefined => {
                 return Err(anyhow::anyhow!(
                     "tx3 arg {key} is of type Undefined, not supported yet"
                 ));
             }
-            tx3_lang::ir::Type::Unit => {
+            WellKnownType::Unit => {
                 return Err(anyhow::anyhow!(
                     "tx3 arg {key} is of type Unit, not supported yet",
                 ));
             }
-            tx3_lang::ir::Type::Utxo => {
+            WellKnownType::Utxo => {
                 return Err(anyhow::anyhow!(
                     "tx3 arg {key} is of type Utxo, not supported yet"
                 ));
             }
-            tx3_lang::ir::Type::AnyAsset => {
+            WellKnownType::AnyAsset => {
                 return Err(anyhow::anyhow!(
                     "tx3 arg {key} is of type AnyAsset, not supported yet"
                 ));
             }
-            tx3_lang::ir::Type::List => {
+            WellKnownType::List => {
                 return Err(anyhow::anyhow!(
                     "tx3 arg {key} is of type List, not supported yet",
                 ));
             }
-            tx3_lang::ir::Type::Custom(x) => {
+            WellKnownType::Custom(x) => {
                 return Err(anyhow::anyhow!(
                     "tx3 arg {key} is a custom type {x}, not supported yet"
                 ));
             }
-            tx3_lang::ir::Type::Map => {
+            WellKnownType::Map => {
                 return Err(anyhow::anyhow!(
                     "tx3 arg {key} is of type Map, not supported yet",
                 ));
@@ -187,12 +194,14 @@ pub fn inquire_args(
 }
 
 pub fn define_args(
-    params: &BTreeMap<String, tx3_lang::ir::Type>,
+    invocation: &mut Invocation,
     inline_args: Option<&str>,
     file_args: Option<&Path>,
     ctx: &crate::Context,
     provider: &Provider,
 ) -> Result<HashMap<String, ArgValue>> {
+    let params = invocation.define_params()?;
+
     let mut remaining_params = params.clone();
 
     let mut loaded_args = super::common::load_args(inline_args, file_args, &remaining_params)?;
@@ -211,19 +220,8 @@ pub fn define_args(
     Ok(loaded_args)
 }
 
-pub async fn resolve_tx(
-    prototx: &ProtoTx,
-    args: HashMap<String, ArgValue>,
-    provider: &Provider,
-) -> Result<TxEnvelope> {
-    let request = tx3_sdk::trp::ProtoTxRequest {
-        tir: tx3_sdk::trp::TirInfo {
-            version: tx3_lang::ir::IR_VERSION.to_string(),
-            encoding: "hex".to_string(),
-            bytecode: hex::encode(prototx.ir_bytes()),
-        },
-        args,
-    };
+pub async fn resolve_tx(invocation: Invocation, provider: &Provider) -> Result<TxEnvelope> {
+    let request = invocation.into_trp_request()?;
 
     provider.trp_resolve(request).await
 }
