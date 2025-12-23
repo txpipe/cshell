@@ -14,23 +14,15 @@ keywords = ["cardano", "blockchain", "wallet"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
 
 [dependencies]
-tx3-lang = "0.13.0"
-tx3-cardano = "0.13.0"
-tx3-sdk = "^0"
-
-# tx3-lang = { git = "https://github.com/tx3-lang/tx3.git" }
-# tx3-cardano = { git = "https://github.com/tx3-lang/tx3.git" }
+# tx3-sdk = "^0"
 # tx3-sdk = { git = "https://github.com/tx3-lang/rust-sdk.git" }
-
-# tx3-lang = { path = "../../tx3-lang/tx3/crates/tx3-lang" }
-# tx3-cardano = { path = "../../tx3-lang/tx3/crates/tx3-cardano" }
-# tx3-sdk = { path = "../../tx3-lang/rust-sdk/sdk" }
+tx3-sdk = { path = "../../tx3-lang/rust-sdk/sdk" }
 
 # utxorpc = { git = "https://github.com/utxorpc/rust-sdk" }
 utxorpc = "0.12.0"
 # utxorpc = { path = "../../utxorpc/rust-sdk" }
 
-bech32 = "0.9.1"
+bech32 = "0.11.1"
 bip39 = { version = "2.0.0", features = ["rand_core"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.29", features = ["derive", "env"] }
