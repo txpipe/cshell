@@ -2,13 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.13.0] - 2025-12-29
+
+### 🚀 Features
+
+- Low-level tx builder with invoke examples (#45)
+- Introduce `wallet utxos` command (#47)
+- Support profile flag for invoke command
+
+### 🚜 Refactor
+
+- Use TII format for invoke command (#49)
+
+### 📚 Documentation
+
+- Add examples (#46)
+
+### ⚙️ Miscellaneous Tasks
+
+- Update deps across the board (#48)
+
+## [0.12.0] - 2025-09-03
+
+### 🚀 Features
+
+- Implement search command (#16)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.12.0
 
 ## [0.11.1] - 2025-08-06
 
 ### 🐛 Bug Fixes
 
 - Improve error message reports
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.11.1
 
 ## [0.11.0] - 2025-08-04
 
