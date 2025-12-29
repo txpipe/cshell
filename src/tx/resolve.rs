@@ -14,6 +14,10 @@ pub struct Args {
     #[arg(long)]
     tii_file: PathBuf,
 
+    /// Profile to use for the transaction (as defined in the TII file)
+    #[arg(long)]
+    profile: Option<String>,
+
     /// Json string containing the invoke args for the transaction
     #[arg(long)]
     args_json: Option<String>,
@@ -42,17 +46,19 @@ pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
         bail!("Provider not found")
     };
 
-    let mut invocation = super::common::prepare_invocation(&args.tii_file, args.tx_template)?;
+    let mut invocation = super::common::prepare_invocation(
+        &args.tii_file,
+        args.tx_template.as_deref(),
+        args.profile.as_deref(),
+    )?;
 
-    let all_args = super::common::define_args(
+    super::common::define_args(
         &mut invocation,
         args.args_json.as_deref(),
         args.args_file.as_deref(),
         ctx,
         provider,
     )?;
-
-    invocation.set_args(all_args);
 
     let TxEnvelope { tx, hash } = super::common::resolve_tx(invocation, provider).await?;
 

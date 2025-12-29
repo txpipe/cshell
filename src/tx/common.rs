@@ -1,87 +1,89 @@
 use anyhow::{bail, Context as _, Result};
 use inquire::{Confirm, MultiSelect};
 use pallas::ledger::addresses::Address;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
 };
 
 use tx3_sdk::{
-    tii::Invocation,
-    trp::{self, TxEnvelope},
-    WellKnownType,
+    core::ArgMap,
+    tii::{Invocation, ParamMap, ParamType},
+    trp::TxEnvelope,
 };
-use tx3_sdk::{ArgValue, UtxoRef};
 
 use crate::provider::types::Provider;
 
 pub fn load_args(
+    invocation: &mut Invocation,
     inline_args: Option<&str>,
     file_args: Option<&Path>,
-    params: &BTreeMap<String, WellKnownType>,
-) -> Result<HashMap<String, ArgValue>> {
+) -> Result<()> {
     let json_string = match (inline_args, file_args) {
         (Some(inline_args), None) => inline_args.to_string(),
         (None, Some(file_args)) => std::fs::read_to_string(file_args)?,
         (Some(_), Some(_)) => bail!("cannot use both inline and file args"),
-        _ => return Ok(HashMap::new()),
+        _ => return Ok(()),
     };
 
     let json_value = serde_json::from_str(&json_string).context("parsing json args string")?;
 
-    let Value::Object(mut value) = json_value else {
+    let Value::Object(value) = json_value else {
         bail!("json args string must be an object");
     };
 
-    let mut args = HashMap::new();
+    invocation.set_args(value);
 
-    for (key, ty) in params {
-        if let Some(value) = value.remove(key) {
-            let arg_value = tx3_sdk::interop::json::from_json(value, ty)?;
-            args.insert(key.clone(), arg_value);
-        }
+    Ok(())
+}
+
+fn inquire_transaction(protocol: &tx3_sdk::tii::Protocol) -> Result<String> {
+    let keys = protocol
+        .txs()
+        .keys()
+        .map(|x| x.to_string())
+        .collect::<Vec<String>>();
+
+    if keys.len() == 1 {
+        return Ok(keys[0].clone());
     }
 
-    Ok(args)
+    let value = inquire::Select::new("Which transaction do you want to build?", keys).prompt()?;
+
+    Ok(value)
 }
 
-pub fn prepare_invocation(tii_file: &Path, tx: Option<String>) -> Result<Invocation> {
+pub fn prepare_invocation(
+    tii_file: &Path,
+    tx: Option<&str>,
+    profile: Option<&str>,
+) -> Result<Invocation> {
     let protocol = tx3_sdk::tii::Protocol::from_file(tii_file).context("parsing tii file")?;
 
-    let template = match tx {
-        Some(template) => template,
-        None => {
-            let template = if protocol.txs().len() == 1 {
-                protocol.txs().keys().next().unwrap().clone()
-            } else {
-                let keys = protocol
-                    .txs()
-                    .keys()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<String>>();
-
-                inquire::Select::new("What transaction do you want to build?", keys).prompt()?
-            };
-            template
-        }
+    let tx = match tx {
+        Some(x) => x.to_string(),
+        None => inquire_transaction(&protocol)?,
     };
 
-    Ok(protocol.invoke(&template, None)?)
+    Ok(protocol.invoke(&tx, profile)?)
 }
 
-pub fn inquire_args(
-    params: &BTreeMap<String, WellKnownType>,
+pub fn inquire_missing_args(
+    invocation: &mut Invocation,
     ctx: &crate::Context,
     provider: &Provider,
-) -> Result<HashMap<String, ArgValue>> {
-    let mut argvalues = HashMap::new();
+) -> Result<()> {
+    let missing: Vec<_> = invocation
+        .unspecified_params()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
 
-    for (key, value) in params {
+    for (key, value) in missing {
         let text_key = format!("{key}:");
 
         match value {
-            WellKnownType::Address => {
+            ParamType::Address => {
                 let custom_address = String::from("custom address");
                 let mut options = ctx
                     .store
@@ -109,88 +111,46 @@ pub fn inquire_args(
                         .address(provider.is_testnet())
                 };
 
-                argvalues.insert(key.clone(), trp::ArgValue::Address(address.to_vec()));
+                invocation.set_arg(&key, json!(address.to_string()));
             }
-            WellKnownType::Int => {
+            ParamType::Integer => {
                 let value = inquire::Text::new(&text_key)
                     .with_help_message("Enter an integer value")
                     .prompt()?
                     .parse::<u64>()
                     .context("invalid integer value")?;
 
-                argvalues.insert(key.clone(), trp::ArgValue::Int(value.into()));
+                invocation.set_arg(&key, json!(value));
             }
-            WellKnownType::UtxoRef => {
+            ParamType::UtxoRef => {
                 let value = inquire::Text::new(&text_key)
                     .with_help_message("Enter the utxo reference as hash#idx")
                     .prompt()
                     .context("invalid integer value")?;
 
-                let (hash, idx) = value
-                    .split_once('#')
-                    .ok_or_else(|| anyhow::anyhow!("expected format: <hash>#<index>"))?;
-
-                let hash = hex::decode(hash).context("invalid hex value for hash")?;
-
-                let idx: u32 = idx.parse().context("invalid integer value for index")?;
-
-                let utxo_ref = UtxoRef::new(hash.as_slice(), idx);
-                argvalues.insert(key.clone(), trp::ArgValue::UtxoRef(utxo_ref));
+                invocation.set_arg(&key, json!(value));
             }
-            WellKnownType::Bool => {
+            ParamType::Boolean => {
                 let value = inquire::Confirm::new(&text_key).prompt()?;
 
-                argvalues.insert(key.clone(), trp::ArgValue::Bool(value));
+                invocation.set_arg(&key, json!(value));
             }
-            WellKnownType::Bytes => {
+            ParamType::Bytes => {
                 let value = inquire::Text::new(&text_key)
                     .with_help_message("Enter the bytes as hex string")
                     .prompt()?;
 
-                let value = hex::decode(value).context("invalid hex value")?;
-
-                argvalues.insert(key.clone(), trp::ArgValue::Bytes(value));
+                invocation.set_arg(&key, json!(value));
             }
-
-            WellKnownType::Undefined => {
+            _ => {
                 return Err(anyhow::anyhow!(
-                    "tx3 arg {key} is of type Undefined, not supported yet"
-                ));
-            }
-            WellKnownType::Unit => {
-                return Err(anyhow::anyhow!(
-                    "tx3 arg {key} is of type Unit, not supported yet",
-                ));
-            }
-            WellKnownType::Utxo => {
-                return Err(anyhow::anyhow!(
-                    "tx3 arg {key} is of type Utxo, not supported yet"
-                ));
-            }
-            WellKnownType::AnyAsset => {
-                return Err(anyhow::anyhow!(
-                    "tx3 arg {key} is of type AnyAsset, not supported yet"
-                ));
-            }
-            WellKnownType::List => {
-                return Err(anyhow::anyhow!(
-                    "tx3 arg {key} is of type List, not supported yet",
-                ));
-            }
-            WellKnownType::Custom(x) => {
-                return Err(anyhow::anyhow!(
-                    "tx3 arg {key} is a custom type {x}, not supported yet"
-                ));
-            }
-            WellKnownType::Map => {
-                return Err(anyhow::anyhow!(
-                    "tx3 arg {key} is of type Map, not supported yet",
+                    "tx3 arg {key} is of a type not supported via CLI"
                 ));
             }
         };
     }
 
-    Ok(argvalues)
+    Ok(())
 }
 
 pub fn define_args(
@@ -199,29 +159,15 @@ pub fn define_args(
     file_args: Option<&Path>,
     ctx: &crate::Context,
     provider: &Provider,
-) -> Result<HashMap<String, ArgValue>> {
-    let params = invocation.define_params()?;
+) -> Result<()> {
+    super::common::load_args(invocation, inline_args, file_args)?;
+    super::common::inquire_missing_args(invocation, ctx, provider)?;
 
-    let mut remaining_params = params.clone();
-
-    let mut loaded_args = super::common::load_args(inline_args, file_args, &remaining_params)?;
-
-    // remove from the remaining params the args we already managed to load from the
-    // file or json
-    for key in loaded_args.keys() {
-        remaining_params.remove(key);
-    }
-
-    // inquire the user for the remaining args
-    let inquired_args = super::common::inquire_args(&remaining_params, ctx, provider)?;
-
-    loaded_args.extend(inquired_args);
-
-    Ok(loaded_args)
+    Ok(())
 }
 
 pub async fn resolve_tx(invocation: Invocation, provider: &Provider) -> Result<TxEnvelope> {
-    let request = invocation.into_trp_request()?;
+    let request = invocation.into_resolve_request()?;
 
     provider.trp_resolve(request).await
 }

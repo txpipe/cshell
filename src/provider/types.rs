@@ -295,7 +295,7 @@ impl Provider {
 
     pub async fn trp_resolve(
         &self,
-        request: tx3_sdk::trp::ProtoTxRequest,
+        request: tx3_sdk::trp::ResolveParams,
     ) -> Result<tx3_sdk::trp::TxEnvelope> {
         let Some(trp_url) = &self.trp_url else {
             bail!("missing TRP configuration for this provider")
@@ -304,7 +304,6 @@ impl Provider {
         let client = tx3_sdk::trp::Client::new(tx3_sdk::trp::ClientOptions {
             endpoint: trp_url.clone(),
             headers: self.trp_headers.clone(),
-            env_args: None,
         });
 
         let result = client.resolve(request).await?;
@@ -314,7 +313,7 @@ impl Provider {
 
     pub async fn trp_submit(
         &self,
-        tx: tx3_sdk::trp::TxEnvelope,
+        request: tx3_sdk::trp::SubmitParams,
     ) -> Result<tx3_sdk::trp::SubmitResponse> {
         let Some(trp_url) = &self.trp_url else {
             bail!("missing TRP configuration for this provider")
@@ -323,10 +322,9 @@ impl Provider {
         let client = tx3_sdk::trp::Client::new(tx3_sdk::trp::ClientOptions {
             endpoint: trp_url.clone(),
             headers: self.trp_headers.clone(),
-            env_args: None,
         });
 
-        Ok(client.submit(tx, vec![]).await?)
+        Ok(client.submit(request).await?)
     }
 
     pub async fn fetch_block(

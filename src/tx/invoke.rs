@@ -3,7 +3,10 @@ use clap::Parser;
 use serde_json::json;
 use std::path::PathBuf;
 use tracing::instrument;
-use tx3_sdk::trp::TxEnvelope;
+use tx3_sdk::{
+    core::{BytesEncoding, BytesEnvelope},
+    trp::{SubmitParams, TxEnvelope},
+};
 
 use crate::output::OutputFormat;
 
@@ -12,6 +15,10 @@ pub struct Args {
     /// Path for TII file describing transaction invoke interface
     #[arg(long)]
     tii_file: PathBuf,
+
+    /// Profile to use for the transaction (as defined in the TII file)
+    #[arg(long)]
+    profile: Option<String>,
 
     /// Json string containing the invoke args for the transaction
     #[arg(long)]
@@ -53,17 +60,19 @@ pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
         bail!("Provider not found")
     };
 
-    let mut invocation = super::common::prepare_invocation(&args.tii_file, args.tx_template)?;
+    let mut invocation = super::common::prepare_invocation(
+        &args.tii_file,
+        args.tx_template.as_deref(),
+        args.profile.as_deref(),
+    )?;
 
-    let all_args = super::common::define_args(
+    super::common::define_args(
         &mut invocation,
         args.args_json.as_deref(),
         args.args_file.as_deref(),
         ctx,
         provider,
     )?;
-
-    invocation.set_args(all_args);
 
     let TxEnvelope { tx, hash } = super::common::resolve_tx(invocation, provider).await?;
 
@@ -73,9 +82,12 @@ pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
 
     if !args.skip_submit {
         provider
-            .trp_submit(TxEnvelope {
-                tx: hex::encode(&cbor),
-                hash: hash.clone(),
+            .trp_submit(SubmitParams {
+                tx: BytesEnvelope {
+                    content: hex::encode(&cbor),
+                    encoding: BytesEncoding::Hex,
+                },
+                witnesses: vec![],
             })
             .await?;
     }
