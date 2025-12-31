@@ -69,6 +69,47 @@ pub fn prepare_invocation(
     Ok(protocol.invoke(&tx, profile)?)
 }
 
+fn inquire_custom_address(param_key: &str) -> Result<Address> {
+    let value = inquire::Text::new(&format!("{param_key}:"))
+        .with_help_message("Enter a bech32 address")
+        .prompt()?;
+
+    Ok(Address::from_bech32(&value).context("invalid bech32 address")?)
+}
+
+fn inquire_address(ctx: &crate::Context, provider: &Provider, param_key: &str) -> Result<Address> {
+    let custom_address = String::from("custom address");
+
+    let mut options = ctx
+        .store
+        .wallets()
+        .iter()
+        .map(|x| x.name.to_string())
+        .collect::<Vec<String>>();
+
+    if options.is_empty() {
+        return inquire_custom_address(param_key);
+    }
+
+    options.push(custom_address.clone());
+
+    let wallet = inquire::Select::new(&format!("{param_key}:"), options).prompt()?;
+
+    if wallet.eq(&custom_address) {
+        Ok(inquire_custom_address(param_key)?)
+    } else {
+        let value = ctx
+            .store
+            .wallets()
+            .iter()
+            .find(|x| x.name.to_string() == wallet)
+            .unwrap()
+            .address(provider.is_testnet());
+
+        Ok(value)
+    }
+}
+
 pub fn inquire_missing_args(
     invocation: &mut Invocation,
     ctx: &crate::Context,
@@ -84,34 +125,8 @@ pub fn inquire_missing_args(
 
         match value {
             ParamType::Address => {
-                let custom_address = String::from("custom address");
-                let mut options = ctx
-                    .store
-                    .wallets()
-                    .iter()
-                    .map(|x| x.name.to_string())
-                    .collect::<Vec<String>>();
-
-                options.push(custom_address.clone());
-
-                let wallet = inquire::Select::new(&text_key, options).prompt()?;
-
-                let address = if wallet.eq(&custom_address) {
-                    let value = inquire::Text::new("address:")
-                        .with_help_message("Enter a bech32 address")
-                        .prompt()?;
-
-                    Address::from_bech32(&value).context("invalid bech32 address")?
-                } else {
-                    ctx.store
-                        .wallets()
-                        .iter()
-                        .find(|x| x.name.to_string() == wallet)
-                        .unwrap()
-                        .address(provider.is_testnet())
-                };
-
-                invocation.set_arg(&key, json!(address.to_string()));
+                let value = inquire_address(ctx, provider, &key)?;
+                invocation.set_arg(&key, json!(value.to_string()));
             }
             ParamType::Integer => {
                 let value = inquire::Text::new(&text_key)
