@@ -2,12 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.2] - 2025-12-31
+
+### 🐛 Bug Fixes
+
+- Improve inquire of custom addresses
+
 ## [0.13.1] - 2025-12-31
 
 ### ⚙️ Miscellaneous Tasks
 
 - Update tx3-sdk to v0.9.1
 - Update tx3-sdk to v0.9.2
+- Release cshell version 0.13.1
 
 ## [0.13.0] - 2025-12-29
 
