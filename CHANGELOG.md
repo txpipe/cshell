@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.1] - 2025-12-31
+
+### ⚙️ Miscellaneous Tasks
+
+- Update tx3-sdk to v0.9.1
+- Update tx3-sdk to v0.9.2
+
 ## [0.13.0] - 2025-12-29
 
 ### 🚀 Features
@@ -18,9 +25,14 @@ All notable changes to this project will be documented in this file.
 
 - Add examples (#46)
 
+### 🔧 Continuous Integration
+
+- Remove x86 apple binary build
+
 ### ⚙️ Miscellaneous Tasks
 
 - Update deps across the board (#48)
+- Release cshell version 0.13.0
 
 ## [0.12.0] - 2025-09-03
 
