@@ -7,7 +7,7 @@ use crate::output::OutputFormatter;
 pub struct Asset {
     #[serde(with = "hex::serde")]
     pub name: Vec<u8>,
-    pub output_coin: String,
+    pub quantity: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -53,14 +53,14 @@ impl OutputFormatter for Balance {
             println!("Assets:");
 
             let mut table = Table::new();
-            table.set_header(vec!["Policy", "Asset", "Output Coin"]);
+            table.set_header(vec!["Policy", "Asset", "Quantity"]);
 
             for entry in &self.assets {
                 for asset in &entry.assets {
                     table.add_row(vec![
                         hex::encode(&entry.policy_id),
                         hex::encode(&asset.name),
-                        asset.output_coin.clone(),
+                        asset.quantity.clone(),
                     ]);
                 }
             }
@@ -107,14 +107,14 @@ impl OutputFormatter for DetailedBalance {
                 println!("  * Assets:");
 
                 let mut table = Table::new();
-                table.set_header(vec!["Policy", "Asset", "Output Coin"]);
+                table.set_header(vec!["Policy", "Asset", "Quantity"]);
 
                 for entry in &utxo.assets {
                     for asset in &entry.assets {
                         table.add_row(vec![
                             hex::encode(&entry.policy_id),
                             hex::encode(&asset.name),
-                            asset.output_coin.clone(),
+                            asset.quantity.clone(),
                         ]);
                     }
                 }

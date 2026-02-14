@@ -107,7 +107,13 @@ impl Provider {
             .items
             .clone()
             .into_iter()
-            .map(|x| x.parsed.unwrap().coin)
+            .filter_map(|x| x.parsed.and_then(|p| p.coin))
+            .filter_map(|c| {
+                c.big_int.as_ref().and_then(|bi| match bi {
+                    utxorpc::spec::cardano::big_int::BigInt::Int(i) => Some(*i as u64),
+                    _ => None,
+                })
+            })
             .sum();
 
         let assets = utxos
@@ -126,7 +132,7 @@ impl Provider {
                             .iter()
                             .map(|inner| Asset {
                                 name: inner.name.to_vec(),
-                                output_coin: inner.output_coin.to_string(),
+                                quantity: crate::utils::format_asset_quantity(&inner.quantity),
                             })
                             .collect::<Vec<Asset>>(),
                     })
@@ -195,6 +201,7 @@ impl Provider {
                 parsed_state: utxo
                     .parsed
                     .map(utxorpc::spec::query::any_utxo_data::ParsedState::Cardano),
+                block_ref: None,
             })
             .collect();
 
@@ -233,7 +240,7 @@ impl Provider {
                     tx: txoref.hash.to_vec(),
                     tx_index: txoref.index as u64,
                     address: address.to_string(),
-                    coin: utxo.coin.to_string(),
+                    coin: crate::utils::format_bigint_opt(&utxo.coin),
                     assets: utxo
                         .assets
                         .iter()
@@ -244,7 +251,7 @@ impl Provider {
                                 .iter()
                                 .map(|inner| Asset {
                                     name: inner.name.to_vec(),
-                                    output_coin: inner.output_coin.to_string(),
+                                    quantity: crate::utils::format_asset_quantity(&inner.quantity),
                                 })
                                 .collect::<Vec<Asset>>(),
                         })
@@ -273,11 +280,8 @@ impl Provider {
     pub async fn submit(&self, tx: &[u8]) -> Result<Vec<u8>> {
         let mut client: CardanoSubmitClient = self.client().await?;
 
-        match client.submit_tx(vec![tx.to_vec()]).await {
-            Ok(response) => response
-                .first()
-                .map(|r| r.to_vec())
-                .ok_or_else(|| anyhow!("No response received from submit")),
+        match client.submit_tx(tx.to_vec()).await {
+            Ok(response) => Ok(response.to_vec()),
             Err(err) => {
                 match err {
                     utxorpc::Error::TransportError(e) => {

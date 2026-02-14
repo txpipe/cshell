@@ -125,6 +125,47 @@ pub fn clip(input: impl ToString, len: usize) -> String {
     format!("{first_part}...{last_part}")
 }
 
+/// Formats an optional BigInt value from utxorpc spec into a displayable string.
+/// This is a common operation when displaying coin values, fees, etc.
+pub fn format_bigint_opt(bigint_opt: &Option<utxorpc::spec::cardano::BigInt>) -> String {
+    use utxorpc::spec::cardano::big_int::BigInt;
+
+    bigint_opt
+        .as_ref()
+        .and_then(|bi| bi.big_int.as_ref())
+        .map(|bi| match bi {
+            BigInt::Int(i) => i.to_string(),
+            BigInt::BigUInt(_) => "BigUInt".to_string(),
+            BigInt::BigNInt(_) => "BigNInt".to_string(),
+        })
+        .unwrap_or_default()
+}
+
+/// Formats an Asset quantity (which is a Quantity enum containing BigInt) into a displayable string.
+pub fn format_asset_quantity(
+    quantity_opt: &Option<utxorpc::spec::cardano::asset::Quantity>,
+) -> String {
+    use utxorpc::spec::cardano::asset::Quantity;
+    use utxorpc::spec::cardano::big_int::BigInt;
+
+    quantity_opt
+        .as_ref()
+        .map(|q| {
+            let bigint_inner = match q {
+                Quantity::OutputCoin(coin) => coin.big_int.as_ref(),
+                Quantity::MintCoin(coin) => coin.big_int.as_ref(),
+            };
+            bigint_inner
+                .map(|bi| match bi {
+                    BigInt::Int(i) => i.to_string(),
+                    BigInt::BigUInt(_) => "BigUInt".to_string(),
+                    BigInt::BigNInt(_) => "BigNInt".to_string(),
+                })
+                .unwrap_or_default()
+        })
+        .unwrap_or_default()
+}
+
 // Helper functions for serializing Option<Vec<u8>> as hex
 pub mod option_hex_vec_u8 {
     use serde::de::Error;

@@ -85,7 +85,11 @@ impl OutputFormatter for WalletUtxoOutput {
                         .map(|datum| hex::encode(&datum.hash))
                         .unwrap_or_else(|| "-".to_string());
 
-                    (output.coin.to_string(), asset_count.to_string(), datum_hash)
+                    (
+                        crate::utils::format_bigint_opt(&output.coin),
+                        asset_count.to_string(),
+                        datum_hash,
+                    )
                 }
                 None => ("-".to_string(), "0".to_string(), "-".to_string()),
             };

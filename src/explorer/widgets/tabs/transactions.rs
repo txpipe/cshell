@@ -14,17 +14,14 @@ use ratatui::{
 };
 use regex::Regex;
 use tui_tree_widget::{Tree, TreeItem, TreeState};
-use utxorpc::spec::{
-    cardano::{
-        self, big_int,
-        certificate::Certificate,
-        d_rep, metadatum, native_script, plutus_data,
-        script::{self},
-        stake_credential, AuxData, Datum, Metadatum, NativeScript, PlutusData, Redeemer,
-        RedeemerPurpose, Script, Tx, TxInput, TxOutput, TxValidity, VKeyWitness, Withdrawal,
-        WitnessSet,
-    },
-    query,
+use utxorpc::spec::cardano::{
+    self, big_int,
+    certificate::Certificate,
+    d_rep, metadatum, native_script, plutus_data,
+    script::{self},
+    stake_credential, AuxData, Datum, Metadatum, NativeScript, PlutusData, Redeemer,
+    RedeemerPurpose, Script, Tx, TxInput, TxOutput, TxValidity, VKeyWitness, Withdrawal,
+    WitnessSet,
 };
 
 use crate::{
@@ -371,7 +368,10 @@ impl TransactionsDetail {
 
         let mut root = vec![
             TreeItem::new_leaf("tx_hash_info".to_string(), format!("Hash: {tx_hash}")),
-            TreeItem::new_leaf("tx_fee_info".to_string(), format!("Fee: {}", tx.fee)),
+            TreeItem::new_leaf(
+                "tx_fee_info".to_string(),
+                format!("Fee: {:?}", crate::utils::format_bigint_opt(&tx.fee)),
+            ),
         ];
 
         // Block Info
@@ -454,16 +454,13 @@ impl TransactionsDetail {
                                 TreeItem::new(
                                     format!("mint_asset_{policy_id}_{i}_{j}"),
                                     format!("Asset: {name}"),
-                                    vec![
-                                        TreeItem::new_leaf(
-                                            format!("mint_asset_mintcoin_{policy_id}_{i}_{j}"),
-                                            format!("Mint Coin: {}", asset.mint_coin),
+                                    vec![TreeItem::new_leaf(
+                                        format!("mint_asset_quantity_{policy_id}_{i}_{j}"),
+                                        format!(
+                                            "Quantity: {:?}",
+                                            crate::utils::format_asset_quantity(&asset.quantity)
                                         ),
-                                        TreeItem::new_leaf(
-                                            format!("mint_asset_outputcoin_{policy_id}_{i}_{j}"),
-                                            format!("Output Coin: {}", asset.output_coin),
-                                        ),
-                                    ],
+                                    )],
                                 )
                                 .expect("Failed to create mint asset node")
                             })
@@ -504,7 +501,10 @@ impl TransactionsDetail {
             }
             children.push(TreeItem::new_leaf(
                 "total_collateral".to_string(),
-                format!("Total Collateral: {}", collateral.total_collateral),
+                format!(
+                    "Total Collateral: {:?}",
+                    crate::utils::format_bigint_opt(&collateral.total_collateral)
+                ),
             ));
             let collateral_node =
                 TreeItem::new("collateral".to_string(), "Collateral".to_string(), children)
@@ -603,7 +603,17 @@ impl TxView {
                 let hash = hex::encode(&tx.hash);
                 let certs = tx.certificates.len();
                 let assets = tx.outputs.iter().map(|o| o.assets.len()).sum();
-                let amount_ada = tx.outputs.iter().map(|o| o.coin).sum();
+                let amount_ada: u64 = tx
+                    .outputs
+                    .iter()
+                    .filter_map(|o| o.coin.as_ref())
+                    .filter_map(|c| {
+                        c.big_int.as_ref().map(|bi| match bi {
+                            big_int::BigInt::Int(i) => *i as u64,
+                            _ => 0,
+                        })
+                    })
+                    .sum();
                 let datum = tx
                     .outputs
                     .iter()
@@ -632,7 +642,17 @@ impl TxView {
         let hash = hex::encode(&tx.hash);
         let certs = tx.certificates.len();
         let assets = tx.outputs.iter().map(|o| o.assets.len()).sum();
-        let amount_ada = tx.outputs.iter().map(|o| o.coin).sum();
+        let amount_ada: u64 = tx
+            .outputs
+            .iter()
+            .filter_map(|o| o.coin.as_ref())
+            .filter_map(|c| {
+                c.big_int.as_ref().map(|bi| match bi {
+                    big_int::BigInt::Int(i) => *i as u64,
+                    _ => 0,
+                })
+            })
+            .sum();
         let datum = tx
             .outputs
             .iter()
@@ -751,8 +771,14 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                         format!("vrf_keyhash_{i}"),
                         format!("VRF Key Hash: {}", hex::encode(&v.vrf_keyhash)),
                     ),
-                    TreeItem::new_leaf(format!("pledge_{i}"), format!("Pledge: {}", v.pledge)),
-                    TreeItem::new_leaf(format!("cost_{i}"), format!("Cost: {}", v.cost)),
+                    TreeItem::new_leaf(
+                        format!("pledge_{i}"),
+                        format!("Pledge: {:?}", crate::utils::format_bigint_opt(&v.pledge)),
+                    ),
+                    TreeItem::new_leaf(
+                        format!("cost_{i}"),
+                        format!("Cost: {:?}", crate::utils::format_bigint_opt(&v.cost)),
+                    ),
                     TreeItem::new_leaf(
                         format!("reward_account_{i}"),
                         format!("Reward Account: {}", hex::encode(&v.reward_account)),
@@ -875,7 +901,10 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                                         .unwrap_or_default();
                                     target_children.push(TreeItem::new_leaf(
                                         format!("delta_coin_{i}_{j}"),
-                                        format!("Delta Coin: {}", target.delta_coin),
+                                        format!(
+                                            "Delta Coin: {:?}",
+                                            crate::utils::format_bigint_opt(&target.delta_coin)
+                                        ),
                                     ));
                                     TreeItem::new(
                                         format!("mir_target_{i}_{j}"),
@@ -908,7 +937,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                     .unwrap_or_default();
                 reg_children.push(TreeItem::new_leaf(
                     format!("coin_{i}"),
-                    format!("Coin: {}", v.coin),
+                    format!("Coin: {:?}", crate::utils::format_bigint_opt(&v.coin)),
                 ));
                 TreeItem::new(format!("reg_cert_{i}"), "Registration", reg_children)
                     .expect("Failed to create registration certificate node")
@@ -921,7 +950,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                     .unwrap_or_default();
                 unreg_children.push(TreeItem::new_leaf(
                     format!("coin_{i}"),
-                    format!("Coin: {}", v.coin),
+                    format!("Coin: {:?}", crate::utils::format_bigint_opt(&v.coin)),
                 ));
                 TreeItem::new(format!("unreg_cert_{i}"), "Unregistration", unreg_children)
                     .expect("Failed to create unregistration certificate node")
@@ -956,7 +985,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                 ));
                 stake_reg_children.push(TreeItem::new_leaf(
                     format!("coin_{i}"),
-                    format!("Coin: {}", v.coin),
+                    format!("Coin: {:?}", crate::utils::format_bigint_opt(&v.coin)),
                 ));
                 TreeItem::new(
                     format!("stake_reg_deleg_cert_{i}"),
@@ -974,7 +1003,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                 vote_reg_children.extend(map_drep(&v.drep, i));
                 vote_reg_children.push(TreeItem::new_leaf(
                     format!("coin_{i}"),
-                    format!("Coin: {}", v.coin),
+                    format!("Coin: {:?}", crate::utils::format_bigint_opt(&v.coin)),
                 ));
                 TreeItem::new(
                     format!("vote_reg_deleg_cert_{i}"),
@@ -996,7 +1025,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                 stake_vote_reg_children.extend(map_drep(&v.drep, i));
                 stake_vote_reg_children.push(TreeItem::new_leaf(
                     format!("coin_{i}"),
-                    format!("Coin: {}", v.coin),
+                    format!("Coin: {:?}", crate::utils::format_bigint_opt(&v.coin)),
                 ));
                 TreeItem::new(
                     format!("stake_vote_reg_deleg_cert_{i}"),
@@ -1054,7 +1083,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                     .unwrap_or_default();
                 reg_drep_children.push(TreeItem::new_leaf(
                     format!("coin_{i}"),
-                    format!("Coin: {}", v.coin),
+                    format!("Coin: {:?}", crate::utils::format_bigint_opt(&v.coin)),
                 ));
                 if let Some(anchor) = &v.anchor {
                     reg_drep_children.push(TreeItem::new_leaf(
@@ -1081,7 +1110,7 @@ fn map_cert<'a>(tx: &Tx) -> TreeItem<'a, String> {
                     .unwrap_or_default();
                 unreg_drep_children.push(TreeItem::new_leaf(
                     format!("coin_{i}"),
-                    format!("Coin: {}", v.coin),
+                    format!("Coin: {:?}", crate::utils::format_bigint_opt(&v.coin)),
                 ));
                 TreeItem::new(
                     format!("unreg_drep_cert_{i}"),
@@ -1544,7 +1573,10 @@ fn map_withdrawal<'a>(withdrawal: &Withdrawal, index: &str) -> Vec<TreeItem<'a, 
         ),
         TreeItem::new_leaf(
             format!("withdrawal_coin_{index}"),
-            format!("Coin: {}", withdrawal.coin),
+            format!(
+                "Coin: {:?}",
+                crate::utils::format_bigint_opt(&withdrawal.coin)
+            ),
         ),
     ];
     children.extend(map_redeemer(&withdrawal.redeemer, index));
@@ -1753,7 +1785,7 @@ fn map_tx_output<'a>(output: &TxOutput, index: usize, tx_hash: &str) -> TreeItem
         ),
         TreeItem::new_leaf(
             format!("output_{tx_hash}_{index}_coin"),
-            format!("Coin: {}", output.coin),
+            format!("Coin: {:?}", crate::utils::format_bigint_opt(&output.coin)),
         ),
     ];
     if !output.assets.is_empty() {
@@ -1777,16 +1809,13 @@ fn map_tx_output<'a>(output: &TxOutput, index: usize, tx_hash: &str) -> TreeItem
                                 TreeItem::new(
                                     format!("output_asset_{policy_id}_{i}_{j}"),
                                     format!("Asset: {name}"),
-                                    vec![
-                                        TreeItem::new_leaf(
-                                            format!("output_asset_mintcoin_{policy_id}_{i}_{j}"),
-                                            format!("Mint Coin: {}", asset.mint_coin),
+                                    vec![TreeItem::new_leaf(
+                                        format!("output_asset_quantity_{policy_id}_{i}_{j}"),
+                                        format!(
+                                            "Quantity: {:?}",
+                                            crate::utils::format_asset_quantity(&asset.quantity)
                                         ),
-                                        TreeItem::new_leaf(
-                                            format!("output_asset_outputcoin_{policy_id}_{i}_{j}"),
-                                            format!("Output Coin: {}", asset.output_coin),
-                                        ),
-                                    ],
+                                    )],
                                 )
                                 .expect("Failed to create asset node")
                             })
