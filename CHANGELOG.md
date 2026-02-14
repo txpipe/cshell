@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2026-02-14
+
+### ⚙️ Miscellaneous Tasks
+
+- Update utxorpc to v0.13
+
 ## [0.13.2] - 2025-12-31
 
 ### 🐛 Bug Fixes
 
 - Improve inquire of custom addresses
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cshell version 0.13.2
 
 ## [0.13.1] - 2025-12-31
 
