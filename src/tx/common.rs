@@ -2,18 +2,21 @@ use anyhow::{bail, Context as _, Result};
 use inquire::{Confirm, MultiSelect};
 use pallas::ledger::addresses::Address;
 use serde_json::{json, Value};
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::Path,
-};
+use std::path::Path;
 
 use tx3_sdk::{
-    core::ArgMap,
-    tii::{Invocation, ParamMap, ParamType},
+    tii::{Invocation, ParamType, Protocol},
     trp::TxEnvelope,
 };
 
 use crate::provider::types::Provider;
+
+const NAMESPACED_BYTES_REF: &str = "https://tx3.land/specs/v1beta0/tii#/$defs/Bytes";
+const NAMESPACED_ADDRESS_REF: &str = "https://tx3.land/specs/v1beta0/tii#/$defs/Address";
+const NAMESPACED_UTXO_REF: &str = "https://tx3.land/specs/v1beta0/tii#/$defs/UtxoRef";
+const CORE_BYTES_REF: &str = "https://tx3.land/specs/v1beta0/core#Bytes";
+const CORE_ADDRESS_REF: &str = "https://tx3.land/specs/v1beta0/core#Address";
+const CORE_UTXO_REF: &str = "https://tx3.land/specs/v1beta0/core#UtxoRef";
 
 pub fn load_args(
     invocation: &mut Invocation,
@@ -54,12 +57,50 @@ fn inquire_transaction(protocol: &tx3_sdk::tii::Protocol) -> Result<String> {
     Ok(value)
 }
 
+fn normalize_tii_ref(reference: &str) -> Option<&'static str> {
+    match reference {
+        NAMESPACED_BYTES_REF => Some(CORE_BYTES_REF),
+        NAMESPACED_ADDRESS_REF => Some(CORE_ADDRESS_REF),
+        NAMESPACED_UTXO_REF => Some(CORE_UTXO_REF),
+        _ => None,
+    }
+}
+
+fn normalize_tii_json_refs(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            if let Some(reference) = map.get("$ref").and_then(Value::as_str) {
+                if let Some(normalized) = normalize_tii_ref(reference) {
+                    map.insert("$ref".to_string(), Value::String(normalized.to_string()));
+                }
+            }
+
+            for nested in map.values_mut() {
+                normalize_tii_json_refs(nested);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                normalize_tii_json_refs(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn load_protocol_from_tii_file(tii_file: &Path) -> Result<Protocol> {
+    let raw = std::fs::read_to_string(tii_file)?;
+    let mut json: Value = serde_json::from_str(&raw)?;
+    normalize_tii_json_refs(&mut json);
+    Protocol::from_json(json).map_err(Into::into)
+}
+
 pub fn prepare_invocation(
     tii_file: &Path,
     tx: Option<&str>,
     profile: Option<&str>,
 ) -> Result<Invocation> {
-    let protocol = tx3_sdk::tii::Protocol::from_file(tii_file).context("parsing tii file")?;
+    let protocol = load_protocol_from_tii_file(tii_file).context("parsing tii file")?;
 
     let tx = match tx {
         Some(x) => x.to_string(),
@@ -261,4 +302,107 @@ pub async fn sign_tx(
     }
 
     Ok(cbor)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn write_temp_tii_file(name: &str, content: serde_json::Value) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("cshell-{name}-{suffix}.tii"));
+        fs::write(&path, serde_json::to_vec_pretty(&content).unwrap()).unwrap();
+        path
+    }
+
+    fn sample_tii(bytes_ref: &str, address_ref: &str, utxo_ref: &str) -> serde_json::Value {
+        json!({
+            "tii": { "version": "v1beta0" },
+            "protocol": {
+                "name": "repro",
+                "scope": "eryxcoop",
+                "version": "1.0.0"
+            },
+            "parties": {
+                "user": {}
+            },
+            "transactions": {
+                "demo": {
+                    "params": {
+                        "type": "object",
+                        "properties": {
+                            "payload": { "$ref": bytes_ref },
+                            "recipient": { "$ref": address_ref },
+                            "source_utxo": { "$ref": utxo_ref },
+                            "quantity": { "type": "integer" }
+                        },
+                        "required": ["payload", "recipient", "source_utxo", "quantity"]
+                    },
+                    "tir": {
+                        "content": "",
+                        "encoding": "hex",
+                        "version": "v1beta0"
+                    }
+                }
+            },
+            "profiles": {}
+        })
+    }
+
+    #[test]
+    fn prepare_invocation_accepts_legacy_core_refs() {
+        let path = write_temp_tii_file(
+            "legacy-core",
+            sample_tii(CORE_BYTES_REF, CORE_ADDRESS_REF, CORE_UTXO_REF),
+        );
+
+        let result = prepare_invocation(&path, Some("demo"), None);
+
+        let _ = fs::remove_file(path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn prepare_invocation_accepts_namespaced_tii_refs() {
+        let path = write_temp_tii_file(
+            "namespaced",
+            sample_tii(
+                NAMESPACED_BYTES_REF,
+                NAMESPACED_ADDRESS_REF,
+                NAMESPACED_UTXO_REF,
+            ),
+        );
+
+        let result = prepare_invocation(&path, Some("demo"), None);
+
+        let _ = fs::remove_file(path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn prepare_invocation_still_rejects_unknown_refs() {
+        let path = write_temp_tii_file(
+            "unknown-ref",
+            sample_tii(
+                CORE_BYTES_REF,
+                CORE_ADDRESS_REF,
+                "https://tx3.land/specs/v1beta0/tii#/$defs/Unknown",
+            ),
+        );
+
+        let result = prepare_invocation(&path, Some("demo"), None);
+
+        let _ = fs::remove_file(path);
+        let error = result.expect_err("unknown refs should still fail");
+        assert!(error.to_string().contains("invalid param type"));
+    }
 }
