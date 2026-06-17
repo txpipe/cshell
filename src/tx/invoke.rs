@@ -4,7 +4,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use tracing::instrument;
 use tx3_sdk::{
-    core::{BytesEncoding, BytesEnvelope},
+    core::BytesEnvelope,
     trp::{SubmitParams, TxEnvelope},
 };
 
@@ -85,7 +85,7 @@ pub async fn run(args: Args, ctx: &crate::Context) -> Result<()> {
             .trp_submit(SubmitParams {
                 tx: BytesEnvelope {
                     content: hex::encode(&cbor),
-                    encoding: BytesEncoding::Hex,
+                    content_type: "hex".to_string(),
                 },
                 witnesses: vec![],
             })

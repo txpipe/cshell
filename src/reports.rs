@@ -149,7 +149,7 @@ impl From<tx3_sdk::trp::Error> for ErrorReport {
                 "args".to_string(),
             )
             .with_detail("arg", x.key)
-            .with_detail("type", x.ty),
+            .with_detail("type", x.arg_type),
             tx3_sdk::trp::Error::InputNotResolved(x) => {
                 ErrorReport::new("Input not resolved".to_string(), "input".to_string())
                     .with_detail("input", x.name)
