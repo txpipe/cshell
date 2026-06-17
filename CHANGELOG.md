@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Update utxorpc to v0.13
+- Release cshell version 0.14.0
 
 ## [0.13.2] - 2025-12-31
 
