@@ -676,12 +676,17 @@ mod tests {
 
     #[test]
     fn private_key_encryption_roundtrip() {
+        use rand_core::RngCore as _;
+
         let password = "hunter123";
+
+        let mut rng = rand_core::UnwrapErr(rand_core::OsRng);
 
         // --- standard
 
-        let private_key =
-            PrivateKey::Normal(SecretKey::new(rand_core::UnwrapErr(rand_core::OsRng)));
+        let mut sk_bytes = [0u8; SecretKey::SIZE];
+        rng.fill_bytes(&mut sk_bytes);
+        let private_key = PrivateKey::Normal(sk_bytes.into());
 
         let private_key_bytes = private_key.as_bytes();
 
@@ -697,9 +702,13 @@ mod tests {
 
         // --- extended
 
-        let private_key = PrivateKey::Extended(SecretKeyExtended::new(rand_core::UnwrapErr(
-            rand_core::OsRng,
-        )));
+        let mut esk_bytes = [0u8; SecretKeyExtended::SIZE];
+        rng.fill_bytes(&mut esk_bytes);
+        // Clamp to a valid Ed25519 extended secret key (the bit tweaks that
+        // SecretKeyExtended::from_bytes verifies).
+        esk_bytes[0] &= 0b1111_1000;
+        esk_bytes[31] = (esk_bytes[31] & 0b0011_1111) | 0b0100_0000;
+        let private_key = PrivateKey::Extended(SecretKeyExtended::from_bytes(esk_bytes).unwrap());
 
         let private_key_bytes = private_key.as_bytes();
 
