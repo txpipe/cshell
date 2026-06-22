@@ -262,3 +262,49 @@ pub async fn sign_tx(
 
     Ok(cbor)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The invoke glue cshell owns: `prepare_invocation` (load the .tii + select
+    // the tx) → `load_args` (parse `--args-json` → `set_args`) →
+    // `into_resolve_request`. A complex record arg must serialize to the tagged
+    // wire form while scalars stay bare — the `05-invoke` arg surface.
+    #[test]
+    fn invoke_encodes_diverse_args_into_resolve_request() {
+        let tii = format!("{}/tests/fixtures/invoke.tii", env!("CARGO_MANIFEST_DIR"));
+        let mut invocation =
+            prepare_invocation(Path::new(&tii), Some("transfer"), None).unwrap();
+
+        let args_json = r#"{
+            "quantity": 2000000,
+            "urgent": true,
+            "memo": "deadbeef",
+            "meta": { "tags": [1, 2, 3], "level": 7 }
+        }"#;
+        load_args(&mut invocation, Some(args_json), None).unwrap();
+
+        let request = invocation.into_resolve_request().unwrap();
+
+        // Record `meta` → tagged struct; fields positional in declared order
+        // (tags, level), not alphabetical.
+        assert_eq!(
+            request.args["meta"],
+            json!({
+                "struct": {
+                    "constructor": 0,
+                    "fields": [
+                        { "list": [{ "int": 1 }, { "int": 2 }, { "int": 3 }] },
+                        { "int": 7 }
+                    ]
+                }
+            })
+        );
+
+        // Scalars stay bare for the resolver to coerce via the flat type.
+        assert_eq!(request.args["quantity"], json!(2000000));
+        assert_eq!(request.args["urgent"], json!(true));
+        assert_eq!(request.args["memo"], json!("deadbeef"));
+    }
+}
