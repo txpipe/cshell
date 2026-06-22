@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
@@ -11,12 +10,6 @@ use crate::{output::OutputFormatter, provider::types::Provider, utils::Name};
 enum NetworkKind {
     Mainnet,
     Testnet,
-}
-
-#[derive(Serialize, Deserialize)]
-struct UTxORPCParameters {
-    url: String,
-    headers: HashMap<String, String>,
 }
 
 #[derive(Parser, Clone)]

@@ -68,24 +68,20 @@ impl TransactionsTabState {
                     (KeyCode::Char('f') | KeyCode::Char('/'), _) => {
                         self.input_mode = InputMode::Editing
                     }
-                    (KeyCode::Esc, _) => {
-                        if !self.search_input.is_empty() {
-                            self.search_input.clear();
-                            self.txs = self
-                                .blocks
-                                .borrow()
-                                .iter()
-                                .flat_map(TxView::from_chain_block)
-                                .collect();
-                        }
+                    (KeyCode::Esc, _) if !self.search_input.is_empty() => {
+                        self.search_input.clear();
+                        self.txs = self
+                            .blocks
+                            .borrow()
+                            .iter()
+                            .flat_map(TxView::from_chain_block)
+                            .collect();
                     }
-                    (KeyCode::Enter, _) => {
-                        if self.table_state.selected().is_some() {
-                            self.detail_state.tree_state.close_all();
-                            self.detail_state.tree_state.select_first();
-                            self.view_mode = ViewMode::Detail;
-                            self.tx_selected = None;
-                        }
+                    (KeyCode::Enter, _) if self.table_state.selected().is_some() => {
+                        self.detail_state.tree_state.close_all();
+                        self.detail_state.tree_state.select_first();
+                        self.view_mode = ViewMode::Detail;
+                        self.tx_selected = None;
                     }
                     _ => {}
                 },
