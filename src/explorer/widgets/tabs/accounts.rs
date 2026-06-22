@@ -21,17 +21,13 @@ pub struct AccountsTabState {
 impl AccountsTabState {
     pub fn handle_key(&mut self, key: &KeyEvent) {
         match (key.code, key.modifiers) {
-            (KeyCode::Char('l') | KeyCode::Right, _) => {
-                if self.list_state.selected().is_some() {
-                    self.focus_on_table = true;
-                    self.table_state.select_next();
-                }
+            (KeyCode::Char('l') | KeyCode::Right, _) if self.list_state.selected().is_some() => {
+                self.focus_on_table = true;
+                self.table_state.select_next();
             }
-            (KeyCode::Char('h') | KeyCode::Left, _) => {
-                if self.focus_on_table {
-                    self.focus_on_table = false;
-                    self.table_state.select(None);
-                }
+            (KeyCode::Char('h') | KeyCode::Left, _) if self.focus_on_table => {
+                self.focus_on_table = false;
+                self.table_state.select(None);
             }
             (KeyCode::Char('j') | KeyCode::Down, _) => {
                 if self.focus_on_table {

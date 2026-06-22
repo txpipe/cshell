@@ -2,14 +2,10 @@ use anyhow::{bail, Context as _, Result};
 use inquire::{Confirm, MultiSelect};
 use pallas::ledger::addresses::Address;
 use serde_json::{json, Value};
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::Path,
-};
+use std::path::Path;
 
 use tx3_sdk::{
-    core::ArgMap,
-    tii::{Invocation, ParamMap, ParamType},
+    tii::{Invocation, ParamType},
     trp::TxEnvelope,
 };
 
@@ -74,7 +70,7 @@ fn inquire_custom_address(param_key: &str) -> Result<Address> {
         .with_help_message("Enter a bech32 address")
         .prompt()?;
 
-    Ok(Address::from_bech32(&value).context("invalid bech32 address")?)
+    Address::from_bech32(&value).context("invalid bech32 address")
 }
 
 fn inquire_address(ctx: &crate::Context, provider: &Provider, param_key: &str) -> Result<Address> {
@@ -274,8 +270,7 @@ mod tests {
     #[test]
     fn invoke_encodes_diverse_args_into_resolve_request() {
         let tii = format!("{}/tests/fixtures/invoke.tii", env!("CARGO_MANIFEST_DIR"));
-        let mut invocation =
-            prepare_invocation(Path::new(&tii), Some("transfer"), None).unwrap();
+        let mut invocation = prepare_invocation(Path::new(&tii), Some("transfer"), None).unwrap();
 
         let args_json = r#"{
             "quantity": 2000000,

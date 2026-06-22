@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{command, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use comfy_table::Table;
 use tracing::instrument;
 use utxorpc::{
@@ -52,7 +52,7 @@ fn cardano_tx_table(block_hash: Option<Vec<u8>>, tx: &[Tx]) -> Table {
     ]);
 
     let block_hash = block_hash
-        .map(|b| hex::encode(b))
+        .map(hex::encode)
         .map(|x| format!("{}...{}", &x[..4], &x[x.len() - 4..]))
         .unwrap_or_default();
 
