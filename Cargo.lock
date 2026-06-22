@@ -1216,7 +1216,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.4",
  "tokio",
  "tower-service",
  "tracing",
@@ -2286,7 +2286,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.4",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -2323,7 +2323,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.4",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -3475,9 +3475,9 @@ dependencies = [
 
 [[package]]
 name = "tx3-sdk"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16120896b5d73621383f4980b3047769de90aea90fe26f500152d61d2287ddaa"
+checksum = "fcad9b73ab830b85345392c2cf8c8ffeafae7945c2c4565047c559d3d3ea08d2"
 dependencies = [
  "base64 0.22.1",
  "bech32",

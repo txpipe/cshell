@@ -14,7 +14,7 @@ keywords = ["cardano", "blockchain", "wallet"]
 categories = ["command-line-utilities", "blockchain", "cardano", "wallet"]
 
 [dependencies]
-tx3-sdk = "0.13.0"
+tx3-sdk = "0.14.0"
 # tx3-sdk = { git = "https://github.com/tx3-lang/rust-sdk.git" }
 # tx3-sdk = { path = "../../tx3-lang/rust-sdk/sdk" }
 
