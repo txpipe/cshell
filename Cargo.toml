@@ -66,11 +66,11 @@ lto = "thin"
 [workspace.metadata.release]
 push = false
 publish = false
+tag-name = "v{{version}}"
 pre-release-hook = [
     "git",
     "cliff",
     "-o",
     "CHANGELOG.md",
-    "--tag",
-    "{{version}}",
+    "--latest",
 ]
