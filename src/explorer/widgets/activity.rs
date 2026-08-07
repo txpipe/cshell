@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use ratatui::{
-    style::{Color, Style, Stylize}, symbols, widgets::{Block, Sparkline, Widget}
+    style::{Color, Style, Stylize},
+    symbols,
+    widgets::{Block, Sparkline, Widget},
 };
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
